@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Glob|Grep|WebSearch|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /home/user/Claude/.hyperresearch/hook.js"
+          }
+        ]
+      }
+    ]
+  }
+}
