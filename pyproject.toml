@@ -67,6 +67,15 @@ Issues = "https://github.com/jordan-gibbs/hyperresearch/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/hyperresearch"]
 
+[tool.hatch.build.targets.sdist]
+# xero-bookkeeper is a separate application with its own pyproject, not part of
+# hyperresearch. The wheel already excludes it (packages= above), but hatchling's
+# sdist defaults to everything git tracks, which would ship the whole app inside
+# the hyperresearch source tarball published to PyPI.
+exclude = [
+    "xero-bookkeeper",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

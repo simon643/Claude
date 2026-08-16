@@ -1,15 +1,40 @@
 name: CI
 
+# This previously filtered on `branches: [main]`. This repository has no `main`
+# branch, so the workflow never ran — the project has been without CI. Matching
+# on paths instead keeps it working whatever the default branch is called.
+#
+# paths-ignore keeps hyperresearch's suite out of xerobk-only changes. Note that
+# a PR touching *only* ignored paths produces no run at all, so do not mark
+# these as required checks without accounting for that.
 on:
   push:
-    branches: [main]
+    paths-ignore:
+      - "xero-bookkeeper/**"
+      - ".github/workflows/xerobk-ci.yml"
   pull_request:
-    branches: [main]
+    paths-ignore:
+      - "xero-bookkeeper/**"
+      - ".github/workflows/xerobk-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
+    # A branch with an open PR matches both `push` and `pull_request`, which
+    # would run every job twice on the same commit. Restricting push events to
+    # the default branch leaves `pull_request` covering feature branches. The
+    # branch name is read from the event rather than hardcoded, so a rename
+    # cannot silently disable this the way `branches: [main]` already did.
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
@@ -18,7 +43,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - run: pip install -e ".[dev]" build
       - run: ruff check src/ tests/
-      - run: pytest tests/ -v
+      - run: pytest tests/ -q
       - run: python -m build --outdir /tmp/hyperresearch-dist
