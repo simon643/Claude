@@ -120,6 +120,11 @@
     text-align: center; color: var(--muted); cursor: pointer;
   }
   .drop.over { border-color: var(--accent); color: var(--accent); }
+  .post-bar { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .post-note { font-size: 13px; color: var(--muted); }
+  button.action-btn.danger { border-color: var(--critical); color: var(--critical); font-weight: 600; }
+  button.action-btn.danger:hover:not(:disabled) { background: var(--critical); color: #fff; }
   .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
   .err { color: var(--critical); font-size: 14px; }
   .toast {
@@ -183,6 +188,10 @@
     <div class="panel" id="recon-stats-panel" hidden>
       <h2>Suggestions</h2>
       <div class="tiles" id="recon-stats"></div>
+      <div id="post-bar" class="post-bar" hidden>
+        <button class="action-btn danger" id="post-btn">Post to Xero</button>
+        <span class="post-note" id="post-note"></span>
+      </div>
     </div>
     <div class="panel">
       <div class="scroll"><table id="recon-table"></table></div>
@@ -355,6 +364,7 @@ async function loadReconcile() {
       el("div", { class: "label" }, t.label),
       el("div", { class: "value" }, String(t.value)),
       el("div", { class: "sub" }, t.sub))));
+    wirePostBar(s.confident);
   } else {
     statsPanel.hidden = true;
   }
@@ -405,6 +415,48 @@ async function loadReconcile() {
     rows));
 
   if (data.message) toast(data.message);
+  loaded.delete("reconcile");
+}
+
+function wirePostBar(confidentCount) {
+  const bar = document.getElementById("post-bar");
+  const btn = document.getElementById("post-btn");
+  const note = document.getElementById("post-note");
+  const canWrite = state.dashboard && state.dashboard.can_write;
+
+  bar.hidden = false;
+  btn.textContent = `Post ${confidentCount} confident to Xero`;
+  btn.disabled = !canWrite || confidentCount === 0;
+
+  if (!canWrite) {
+    note.textContent = "Read-only connection — reconnect with --allow-writes to enable posting.";
+    return;
+  }
+  if (confidentCount === 0) {
+    note.textContent = "Nothing is confident enough to post automatically.";
+    return;
+  }
+  // Says plainly what the click does. This writes to the real ledger.
+  note.textContent = "Writes payments and bank transactions to your live Xero ledger.";
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = "Posting…";
+    try {
+      const result = await api("/api/post", { method: "POST", body: "{}" });
+      if (!result.ok) throw new Error(result.error || "posting failed");
+      note.textContent =
+        `${result.posted} posted, ${result.skipped} skipped, ${result.failed} failed. ` +
+        `Review with \`xerobk audit\`.`;
+      btn.textContent = "Posted";
+      await loadReconcile();
+    } catch (error) {
+      btn.disabled = false;
+      btn.textContent = `Post ${confidentCount} confident to Xero`;
+      note.textContent = error.message;
+      toast(error.message);
+    }
+  };
 }
 
 function wireImport() {

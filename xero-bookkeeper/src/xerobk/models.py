@@ -210,7 +210,20 @@ class Invoice:
 
     @property
     def is_outstanding(self) -> bool:
-        return self.status == InvoiceStatus.AUTHORISED and self.amount_due > 0
+        """Whether this document still carries a balance, either sign.
+
+        Credit notes and adjustments sit on the ledger with a NEGATIVE
+        amount_due. Requiring ``> 0`` here silently dropped them from every
+        aged total, which made payables read high by the value of every credit
+        note on file — caught against a real ledger, where one -$4,165.45
+        credit put the reported figure $4,165.45 above Xero's own.
+        """
+        return self.status == InvoiceStatus.AUTHORISED and self.amount_due != 0
+
+    @property
+    def is_credit(self) -> bool:
+        """A credit note or adjustment: reduces what is owed rather than adding."""
+        return self.amount_due < 0
 
     def days_overdue(self, as_of: date) -> int:
         """Positive when overdue, negative when not yet due, 0 if undated."""
@@ -219,7 +232,8 @@ class Invoice:
         return (as_of - self.due_date).days
 
     def is_overdue(self, as_of: date) -> bool:
-        return self.is_outstanding and self.days_overdue(as_of) > 0
+        # A credit note is never "overdue" — nobody owes it.
+        return self.is_outstanding and not self.is_credit and self.days_overdue(as_of) > 0
 
     @classmethod
     def from_api(cls, data: dict[str, Any], default_type: InvoiceType = InvoiceType.ACCREC) -> Invoice:

@@ -236,6 +236,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._json(self._handle_import(raw))
             elif path == "/api/coding":
                 self._json(self._handle_coding(raw))
+            elif path == "/api/post":
+                self._json(self._handle_post())
             else:
                 self._error(404, "unknown endpoint")
         except ProviderError as exc:
@@ -277,6 +279,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.state.ruleset.rules = explicit + learned
 
         return {"ok": True, "learned_rules": len(learned)}
+
+    def _handle_post(self) -> dict[str, Any]:
+        """Post confident suggestions to Xero. This changes the real ledger."""
+        from .posting import PostingError, post_batch
+
+        state = self.state
+        with state.lock:
+            lines = list(state.bank_lines)
+        if not lines:
+            return {"ok": False, "error": "no bank lines loaded"}
+
+        suggestions = suggest_all(lines, state.provider.invoices(), state.ruleset)
+        try:
+            summary = post_batch(
+                suggestions,
+                state.provider,
+                state.store,
+                bank_account_code=state.settings.bank_account_code,
+            )
+        except PostingError as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, **summary.to_dict()}
 
     def _serve_ui(self) -> None:
         page = UI_DIR / "app.html"

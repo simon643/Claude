@@ -417,6 +417,208 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_accounts(args: argparse.Namespace) -> int:
+    """List the chart of accounts, or choose the bank account writes post to."""
+    provider = _provider(args)
+    settings = Settings.load()
+
+    if args.use:
+        codes = {a.code for a in provider.accounts()}
+        if codes and args.use not in codes:
+            print(f"error: account code {args.use} is not in the chart of accounts", file=sys.stderr)
+            return 2
+        settings.bank_account_code = args.use
+        settings.save()
+        print(f"payments and bank transactions will post against account {args.use}")
+        return 0
+
+    accounts = provider.accounts()
+    if args.json:
+        _emit({
+            "bank_account_code": settings.bank_account_code,
+            "accounts": [
+                {"code": a.code, "name": a.name, "type": a.account_type, "tax_type": a.tax_type}
+                for a in accounts
+            ],
+        }, True)
+        return 0
+
+    if not accounts:
+        print("\nNo chart of accounts available from this source.")
+        print("Connect to Xero (`xerobk connect`) to read the real one.\n")
+        return 0
+
+    print(f"\n{len(accounts)} account(s)")
+    _rule(72)
+    for account in accounts:
+        marker = " <- writes post here" if account.code == settings.bank_account_code else ""
+        print(f"  {account.code:<8} {account.name[:34]:<34} {account.account_type:<12}{marker}")
+    _rule(72)
+    if not settings.bank_account_code:
+        print("No bank account chosen yet. Set one with: xerobk accounts --use <CODE>\n")
+    return 0
+
+
+def cmd_post(args: argparse.Namespace) -> int:
+    """Post reconciliation decisions to Xero for real."""
+    from .posting import PostingError, describe, post_batch
+
+    provider = _provider(args)
+    csv_path = Path(args.csv)
+    if not csv_path.exists():
+        print(f"error: no such file: {csv_path}", file=sys.stderr)
+        return 2
+
+    lines = read_bank_csv(csv_path)
+    if not lines:
+        print(f"error: no transactions parsed from {csv_path}", file=sys.stderr)
+        return 2
+
+    settings = Settings.load()
+    with Store() as store:
+        ruleset = _load_ruleset(args, store)
+        suggestions = suggest_all(lines, provider.invoices(), ruleset)
+
+        if args.dry_run:
+            # Not the default: writes go straight through unless asked otherwise.
+            print(f"\nDRY RUN — nothing will be sent to {provider.name}\n")
+            for s in suggestions:
+                if args.all or s.is_confident:
+                    print(f"  would post: {s.line.date}  {s.line.description[:40]:<40} {s.summary()}")
+            print()
+            return 0
+
+        try:
+            summary = post_batch(
+                suggestions, provider, store,
+                bank_account_code=settings.bank_account_code,
+                confident_only=not args.all,
+            )
+        except PostingError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.json:
+            _emit(summary.to_dict(), True)
+            return 1 if summary.failed else 0
+
+        currency = provider.organisation().base_currency
+        print(f"\nPosting to {provider.name}")
+        _rule(88)
+        for result in summary.results:
+            mark = "OK" if result.ok and result.action != "skipped" else ("--" if result.ok else "!!")
+            print(f"{mark} {result.line_id[:10]}  {result.action:<18} {result.detail}")
+        _rule(88)
+        print(describe(summary, currency))
+        print("Every write is recorded locally — review with `xerobk audit`.\n")
+        return 1 if summary.failed else 0
+
+
+def cmd_invoice(args: argparse.Namespace) -> int:
+    """Create an invoice or bill in Xero."""
+    from .drafting import ValidationError, build_draft
+    from .models import InvoiceType
+    from .posting import PostingError, post_draft
+
+    provider = _provider(args)
+
+    if args.file:
+        try:
+            spec = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"error: could not read {args.file}: {exc}", file=sys.stderr)
+            return 2
+        contact = str(spec.get("contact") or "")
+        lines = list(spec.get("lines") or [])
+        reference = str(spec.get("reference") or "")
+    else:
+        if not (args.contact and args.description and args.amount):
+            print(
+                "error: provide --file, or all of --contact, --description and --amount",
+                file=sys.stderr,
+            )
+            return 2
+        contact = args.contact
+        lines = [{
+            "description": args.description,
+            "unit_amount": args.amount,
+            "account_code": args.account or "",
+        }]
+        reference = args.reference or ""
+
+    draft = build_draft(
+        contact,
+        lines,
+        invoice_type=InvoiceType.ACCPAY if args.bill else InvoiceType.ACCREC,
+        payment_terms_days=args.terms,
+        reference=reference,
+    )
+
+    print(f"\n{draft.summary()}")
+    for line in draft.lines:
+        print(f"  {line.description[:44]:<44} {line.line_amount:>12}  {line.account_code or '(no code)'}")
+    print()
+
+    errors = draft.validate()
+    if errors:
+        print("This draft is not valid:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        print("DRY RUN — nothing sent. Payload:")
+        print(json.dumps(draft.to_payload(), indent=2))
+        return 0
+
+    with Store() as store:
+        try:
+            result = post_draft(draft, provider, store)
+        except (PostingError, ValidationError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+    if not result.ok:
+        print(f"error: {result.detail}", file=sys.stderr)
+        return 1
+    print(f"{result.detail} (status DRAFT — approve it in Xero to put it in the ledger)\n")
+    return 0
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Review everything this tool has sent to Xero."""
+    with Store() as store:
+        entries = store.audit_tail(limit=args.limit)
+
+    if args.json:
+        _emit({"entries": entries}, True)
+        return 0
+
+    if not entries:
+        print("\nNothing has been written to Xero from this machine.\n")
+        return 0
+
+    print(f"\nLast {len(entries)} write(s) to Xero")
+    _rule(100)
+    print(f"  {'when':<22}{'action':<24}{'target':<22}{'outcome':<10}detail")
+    _rule(100)
+    for entry in entries:
+        print(
+            f"  {entry['created_at'][:19]:<22}{entry['action'][:23]:<24}"
+            f"{str(entry['target'])[:21]:<22}{entry['outcome']:<10}{str(entry['detail'])[:40]}"
+        )
+    _rule(100)
+    pending = [e for e in entries if e["outcome"] == "pending"]
+    if pending:
+        print(
+            f"\n{len(pending)} write(s) still marked pending. Each was sent but its outcome was\n"
+            "never recorded — check in Xero whether it landed before retrying.\n"
+        )
+    else:
+        print()
+    return 0
+
+
 def cmd_ui(args: argparse.Namespace) -> int:
     from .server import serve
 
@@ -486,6 +688,40 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--init", action="store_true", help="write the starter rule set")
     p.add_argument("--force", action="store_true", help="overwrite an existing rules file")
     p.set_defaults(func=cmd_rules)
+
+    p = sub.add_parser("accounts", parents=[common], help="list the chart of accounts")
+    p.add_argument("--use", metavar="CODE", help="set the bank account that writes post against")
+    p.set_defaults(func=cmd_accounts)
+
+    p = sub.add_parser(
+        "post", parents=[common],
+        help="POST reconciliation decisions to Xero (this changes your ledger)",
+    )
+    p.add_argument("csv", help="path to the bank statement CSV")
+    p.add_argument("--all", action="store_true",
+                   help="include suggestions below the confidence bar, not just confident ones")
+    p.add_argument("--dry-run", action="store_true",
+                   help="show what would be sent without sending it")
+    p.set_defaults(func=cmd_post)
+
+    p = sub.add_parser(
+        "invoice", parents=[common],
+        help="create an invoice or bill in Xero (created as DRAFT)",
+    )
+    p.add_argument("--file", metavar="JSON", help="read the draft from a JSON file")
+    p.add_argument("--contact", help="contact name")
+    p.add_argument("--description", help="single line description")
+    p.add_argument("--amount", help="single line unit amount")
+    p.add_argument("--account", help="account code for the line")
+    p.add_argument("--reference", help="invoice reference")
+    p.add_argument("--terms", type=int, default=14, help="payment terms in days (default 14)")
+    p.add_argument("--bill", action="store_true", help="create a supplier bill instead of a sales invoice")
+    p.add_argument("--dry-run", action="store_true", help="show the payload without sending it")
+    p.set_defaults(func=cmd_invoice)
+
+    p = sub.add_parser("audit", parents=[common], help="review what has been written to Xero")
+    p.add_argument("--limit", type=int, default=50, help="how many entries to show")
+    p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("ui", parents=[common], help="open the local dashboard in a browser")
     p.add_argument("--port", type=int, default=None, help="port to listen on (default: pick a free one)")
