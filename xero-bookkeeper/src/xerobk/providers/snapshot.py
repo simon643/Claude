@@ -37,6 +37,11 @@ from ..models import (
 from . import AgedReport, ProviderError, ReadOnlyError
 from .bankcsv import read_bank_csv
 
+_READ_ONLY = (
+    "This is an offline snapshot — it cannot post {what} to Xero. "
+    "Set XERO_CLIENT_ID and run `xerobk connect --allow-writes` to enable writes."
+)
+
 
 class SnapshotProvider:
     """Reads a point-in-time snapshot from disk. Never touches the network."""
@@ -106,6 +111,9 @@ class SnapshotProvider:
         rows = raw.get("accounts") or raw.get("items") or []
         return [Account.from_api(row) for row in rows]
 
+    def bank_accounts(self) -> list[Account]:
+        return [a for a in self.accounts() if a.account_type.upper() == "BANK"]
+
     def invoices(self, invoice_type: InvoiceType | None = None) -> list[Invoice]:
         out: list[Invoice] = []
         wanted = (
@@ -157,13 +165,10 @@ class SnapshotProvider:
     # -- writes -----------------------------------------------------------
 
     def create_invoice(self, payload: dict[str, Any]) -> dict[str, Any]:
-        raise ReadOnlyError(
-            "This is an offline snapshot — it cannot post invoices to Xero. "
-            "Set XERO_CLIENT_ID and run `xerobk connect` to enable writes."
-        )
+        raise ReadOnlyError(_READ_ONLY.format(what="invoices"))
 
     def create_bank_transaction(self, payload: dict[str, Any]) -> dict[str, Any]:
-        raise ReadOnlyError(
-            "This is an offline snapshot — it cannot post bank transactions to Xero. "
-            "Set XERO_CLIENT_ID and run `xerobk connect` to enable writes."
-        )
+        raise ReadOnlyError(_READ_ONLY.format(what="bank transactions"))
+
+    def create_payment(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raise ReadOnlyError(_READ_ONLY.format(what="payments"))

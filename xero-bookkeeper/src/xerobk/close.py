@@ -115,7 +115,12 @@ def check_overdue_debt(ctx: CloseContext) -> list[Finding]:
         return []
 
     total = sum((i.amount_due for i in outstanding), ZERO)
-    escalate = [i for i in outstanding if i.days_overdue(ctx.as_of) >= ctx.escalation_days]
+    # Credit notes carry a negative balance and an old date, so they would
+    # otherwise appear on the chase list as ancient "debts" nobody owes.
+    escalate = [
+        i for i in outstanding
+        if not i.is_credit and i.days_overdue(ctx.as_of) >= ctx.escalation_days
+    ]
     if not escalate:
         return []
 
@@ -228,8 +233,13 @@ def _contact_key(name: str) -> str:
     return " ".join(words)
 
 
+def _reference_key(reference: str) -> str:
+    """Normalise an invoice reference for comparison."""
+    return re.sub(r"[^a-z0-9]+", " ", (reference or "").lower()).strip()
+
+
 def check_duplicate_invoices(ctx: CloseContext) -> list[Finding]:
-    """Same contact, same amount, dates close together — likely double-entered."""
+    """Same contact, same amount, same reference, dates close together."""
     buckets: dict[tuple[str, str], list[Invoice]] = defaultdict(list)
     for invoice in ctx.invoices:
         if invoice.status in (InvoiceStatus.VOIDED, InvoiceStatus.DELETED):
@@ -246,8 +256,18 @@ def check_duplicate_invoices(ctx: CloseContext) -> list[Finding]:
                 continue
             # A genuine recurring charge repeats monthly; anything inside a
             # fortnight of an identical amount is more likely a double entry.
-            if (second.invoice_date - first.invoice_date).days <= 14:
-                suspicious.append((first, second))
+            if (second.invoice_date - first.invoice_date).days > 14:
+                continue
+            # ...unless the references differ, which means they are distinct
+            # pieces of work that happen to cost the same. Staged progress
+            # claims do this constantly: a builder raising "83 Gordon (Base
+            # Stage)" and "11 Jefferson (Base Stage)" for $66,000 each on the
+            # same day is billing two properties, not double-entering one.
+            # Without this, one real ledger produced 21 pairs and zero were real.
+            ref_a, ref_b = _reference_key(first.reference), _reference_key(second.reference)
+            if ref_a and ref_b and ref_a != ref_b:
+                continue
+            suspicious.append((first, second))
 
     if not suspicious:
         return []
@@ -433,7 +453,10 @@ def check_cash_vs_receivables(ctx: CloseContext) -> list[Finding]:
 
 def check_missing_due_dates(ctx: CloseContext) -> list[Finding]:
     """Invoices with no due date never appear as overdue and never get chased."""
-    missing = [i for i in ctx.invoices if i.is_outstanding and i.due_date is None]
+    missing = [
+        i for i in ctx.invoices
+        if i.is_outstanding and not i.is_credit and i.due_date is None
+    ]
     if not missing:
         return []
 
@@ -460,7 +483,7 @@ def check_contacts_missing_email(ctx: CloseContext) -> list[Finding]:
     with_debt = {
         i.contact.name
         for i in ctx.sales
-        if i.is_outstanding and not (i.contact.email or "").strip()
+        if i.is_outstanding and not i.is_credit and not (i.contact.email or "").strip()
     }
     if not with_debt:
         return []

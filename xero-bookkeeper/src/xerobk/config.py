@@ -84,6 +84,10 @@ class Settings:
     """
 
     allow_writes: bool = False
+    # Bank account code that payments and bank transactions post against.
+    # Xero rejects both without one, so `xerobk post` refuses to run until it
+    # is set rather than guessing which account the money moved through.
+    bank_account_code: str = ""
     gst_registered: bool = True
     bas_frequency: str = "quarterly"  # quarterly | monthly | annual
     aged_debt_escalation_days: int = 60

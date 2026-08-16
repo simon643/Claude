@@ -257,6 +257,10 @@ class LiveProvider:
         """
         return []
 
+    def bank_accounts(self) -> list[Account]:
+        """Bank accounts, which payments and bank transactions must post against."""
+        return [a for a in self.accounts() if a.account_type.upper() == "BANK"]
+
     # -- writes -----------------------------------------------------------
 
     def create_invoice(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -264,6 +268,18 @@ class LiveProvider:
 
     def create_bank_transaction(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("BankTransactions", method="POST", body={"BankTransactions": [payload]})
+
+    def create_payment(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Apply a payment to an invoice or bill.
+
+        This is what actually reconciles a receipt against an invoice in Xero;
+        creating a bank transaction alone would record the money but leave the
+        invoice showing as unpaid.
+
+        Xero's Payments endpoint takes PUT, not POST — a POST is silently
+        treated as a different operation and will not do what you expect.
+        """
+        return self._request("Payments", method="PUT", body={"Payments": [payload]})
 
 
 def _closing_balance(report: dict[str, Any], account_code: str) -> Any:

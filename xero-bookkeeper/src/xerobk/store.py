@@ -191,6 +191,16 @@ class Store:
         rows = self._query("SELECT line_id FROM coding_decisions")
         return {row["line_id"] for row in rows}
 
+    def posted_line_ids(self) -> set[str]:
+        """Lines already written through to Xero.
+
+        This is the idempotency guard: re-importing the same statement and
+        re-running `post` must resume, not create a second payment for a
+        receipt Xero has already recorded.
+        """
+        rows = self._query("SELECT line_id FROM coding_decisions WHERE posted = 1")
+        return {row["line_id"] for row in rows}
+
     def coding_history(self, limit: int = 5000) -> list[tuple[BankLine, str]]:
         """Past decisions as ``(line, account_code)`` pairs for rule learning."""
         rows = self._query(

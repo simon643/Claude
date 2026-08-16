@@ -13,7 +13,9 @@ library. `pip install -e .` pulls nothing.
 xerobk status                 # headline position
 xerobk ui                     # dashboard in your browser
 xerobk reconcile bank.csv     # coding suggestions for a bank statement
+xerobk post bank.csv          # write those decisions back to Xero
 xerobk close                  # month-end / BAS checklist
+xerobk audit                  # everything this tool has sent to Xero
 ```
 
 ---
@@ -70,10 +72,74 @@ your live ledger.
 | Reports, ageing, close checklist | yes | yes |
 | Bank coding suggestions | yes | yes |
 | Recording decisions locally | yes | yes |
-| Posting invoices / transactions to Xero | no | yes |
+| Posting payments / transactions / invoices to Xero | no | yes |
 
 Write scopes are opt-in per connection, so an accidental run can never mutate
 the ledger.
+
+## Writing to Xero
+
+Posting needs a bank account to write against — Xero rejects payments and bank
+transactions without one:
+
+```bash
+xerobk accounts              # list the chart of accounts
+xerobk accounts --use 090    # choose the account the money moves through
+```
+
+Then:
+
+```bash
+xerobk post statement.csv --dry-run   # show what would be sent
+xerobk post statement.csv             # send it
+```
+
+Two different writes come out of a reconciliation run, and the distinction
+matters:
+
+- an invoice **match** becomes a **Payment** against that invoice. This is what
+  marks it paid. Recording a bank transaction instead would book the money but
+  leave the invoice sitting in the aged report forever.
+- a coded line becomes a **BankTransaction** (`SPEND` or `RECEIVE`) against the
+  coding account, for money that is not settling a document.
+
+Creating documents:
+
+```bash
+xerobk invoice --contact "Acme Pty Ltd" --description "Consulting" \
+               --amount 1000 --account 200
+xerobk invoice --file draft.json --bill        # a supplier bill
+```
+
+Invoices are always created as `DRAFT`. Approving one puts it in the ledger and
+on the BAS, which should be a deliberate second step in Xero.
+
+### What protects you
+
+**Nothing posts twice.** Every bank line has a stable content-derived id, and
+lines already posted are skipped — re-running after a partial failure resumes
+rather than duplicating.
+
+**Ambiguous matches are never posted.** If a payment could settle any of several
+same-priced invoices, it is skipped for a human to decide. Marking the wrong
+invoice paid is worse than leaving it.
+
+**Payments never exceed the invoice balance.** A batch payment is split across
+its invoices, each capped at what that invoice actually owes.
+
+**Failures are per-line.** One rejected payment does not abandon the batch, and
+Xero's own error text is recorded against the line that failed.
+
+**Everything is logged before it is sent:**
+
+```bash
+xerobk audit
+```
+
+The audit row is written *before* the request leaves, not after. If the process
+dies mid-request the worst case is a row marked `pending` that needs checking —
+recoverable — rather than a change in Xero with no local record. `xerobk audit`
+calls out pending rows explicitly.
 
 ---
 
@@ -126,7 +192,7 @@ note:
 | `overdue_debt` | invoices past the escalation threshold |
 | `debtor_concentration` | one customer holding too much of the book |
 | `duplicate_contacts` | the same entity entered twice, splitting its balance |
-| `duplicate_invoices` | same contact, same total, within 14 days |
+| `duplicate_invoices` | same contact, same total, same reference, within 14 days |
 | `draft_invoices` | drafts inside the period — revenue and GST not yet in the ledger |
 | `gst_consistency` | invoices whose recorded tax does not recompute from the lines |
 | `missing_due_dates` | outstanding invoices that can never age |
@@ -183,6 +249,7 @@ src/xerobk/
   reconcile.py      bank line <-> invoice matching, confidence scoring
   close.py          the close checks
   drafting.py       invoice/bill payload construction and validation
+  posting.py        turning decisions into Xero writes, with an audit trail
   reports.py        dashboard assembly
   store.py          SQLite: coding history, close runs, audit log
   server.py         loopback UI server
@@ -251,6 +318,11 @@ Worth knowing before relying on it:
 
 - **Bank feeds.** Xero exposes live statement lines only through the Bank Feeds
   API, which needs a partner-level app. CSV import is the supported route here.
+- **Contact merging** is not possible via the API at all — Xero offers no merge
+  endpoint, so duplicates are reported but must be merged in the Xero UI.
+- **The write paths have unit tests but no integration tests.** Payload shapes
+  are verified against a recording fake; they have not been exercised against a
+  live Xero tenant. Consider a Xero demo organisation for the first run.
 - **Cash basis.** GST figures are accruals-basis only.
 - **Multi-currency.** Models carry currency and rate, but reports total in the
   base currency without revaluation.
