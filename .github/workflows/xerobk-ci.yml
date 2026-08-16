@@ -1,0 +1,149 @@
+name: xerobk CI
+
+# Deliberately no `branches:` filter. The sibling ci.yml filters on `main`,
+# which does not exist in this repository, so it never runs. Matching on paths
+# instead means this workflow keeps working whatever the default branch is
+# called, and only spends CI time when xerobk actually changes.
+on:
+  push:
+    paths:
+      - "xero-bookkeeper/**"
+      - ".github/workflows/xerobk-ci.yml"
+  pull_request:
+    paths:
+      - "xero-bookkeeper/**"
+      - ".github/workflows/xerobk-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: xerobk-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: xero-bookkeeper
+
+# A branch with an open PR matches both `push` and `pull_request`, so every job
+# would run twice on the same commit. Skipping push events on non-default
+# branches leaves `pull_request` to cover feature branches and `push` to cover
+# what actually lands. Reading default_branch from the event keeps this correct
+# if the branch is ever renamed — the sibling ci.yml hardcoded `main` and has
+# silently never run since. (Repeated per job: the `env` context is not
+# available in a job-level `if`, so this cannot be hoisted into a variable.)
+
+jobs:
+  test:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Matches requires-python = ">=3.11,<3.14" in xero-bookkeeper/pyproject.toml.
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: xero-bookkeeper/pyproject.toml
+
+      # xerobk declares zero runtime dependencies on purpose; this step
+      # installing nothing but the dev tools is the check that it stayed that way.
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Type check
+        run: mypy src
+
+      - name: Test
+        run: pytest -q
+
+      # Unit tests import the package directly and would still pass if the
+      # console script, package data, or provider wiring were broken. These
+      # exercise the installed entry point end to end against the demo data.
+      - name: CLI smoke test
+        env:
+          XEROBK_HOME: ${{ runner.temp }}/xerobk-home
+        run: |
+          xerobk --version
+          xerobk status --snapshot data/demo
+          xerobk aged --snapshot data/demo --json > /dev/null
+          xerobk reconcile data/demo/bank_lines.csv --snapshot data/demo --json > /dev/null
+          xerobk rules --json > /dev/null
+          # `close` exits 1 when it finds blockers, which the demo data has by
+          # design. Assert that exact contract rather than letting `set -e` fail.
+          xerobk close --snapshot data/demo --json > /dev/null && status=0 || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "expected exit 1 from a demo close run with blockers, got $status" >&2
+            exit 1
+          fi
+
+  demo-data:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # The demo snapshot is generated, so it can silently drift from its
+    # generator. Regenerating and diffing keeps the committed JSON honest.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Regenerate the demo snapshot
+        run: python data/demo/generate.py
+      - name: Fail if the committed snapshot is stale
+        run: git diff --exit-code -- data/demo
+
+  no-real-data:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # xerobk handles real financial data and OAuth tokens. This is a tripwire
+    # against committing any of it, since .gitignore only protects files that
+    # were never force-added.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Override the workflow-level default: these checks reason about
+        # repo-root-relative paths, so they must not run from a subdirectory.
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      # `--full-name -- :/` forces repo-root-relative paths for the whole repo
+      # regardless of the working directory. Plain `git ls-files -- .` is
+      # cwd-relative and would silently scan only part of the tree.
+      - name: Check for tracked credentials or live ledger data
+        run: |
+          leaked=$(git ls-files --full-name -- ':/' \
+            | grep -E '(^|/)(token|config)\.json$|\.sqlite3|(^|/)snapshots/' \
+            || true)
+          if [ -n "$leaked" ]; then
+            echo "::error::credential, database, or snapshot files are tracked in git" >&2
+            echo "$leaked" >&2
+            exit 1
+          fi
+          echo "no credential or snapshot files tracked"
+
+      # Scoped to xero-bookkeeper: a real bank statement would land here, and
+      # the rest of the repo is free to add CSVs for its own reasons.
+      - name: Check for stray bank statements
+        run: |
+          stray=$(git ls-files --full-name -- ':/xero-bookkeeper/**/*.csv' \
+            | grep -v '^xero-bookkeeper/data/demo/bank_lines\.csv$' \
+            || true)
+          if [ -n "$stray" ]; then
+            echo "::error::unexpected CSV tracked under xero-bookkeeper (real bank statements must not be committed)" >&2
+            echo "$stray" >&2
+            exit 1
+          fi
+          echo "only the synthetic demo statement is tracked"

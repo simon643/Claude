@@ -1,0 +1,53 @@
+{
+  "contacts": [
+    {
+      "contact_id": "c1000000-0000-4000-8000-000000000001",
+      "name": "Harbourline Constructions Pty Ltd",
+      "email": "accounts@harbourline.example",
+      "is_customer": true,
+      "is_supplier": false
+    },
+    {
+      "contact_id": "c1000000-0000-4000-8000-000000000002",
+      "name": "Harbourline Constructions",
+      "email": null,
+      "is_customer": true,
+      "is_supplier": false
+    },
+    {
+      "contact_id": "c1000000-0000-4000-8000-000000000003",
+      "name": "Kestrel Build Group Pty Ltd",
+      "email": "ap@kestrelbuild.example",
+      "is_customer": true,
+      "is_supplier": false
+    },
+    {
+      "contact_id": "c1000000-0000-4000-8000-000000000004",
+      "name": "Verity Projects Pty Ltd",
+      "email": null,
+      "is_customer": true,
+      "is_supplier": false
+    },
+    {
+      "contact_id": "c1000000-0000-4000-8000-000000000005",
+      "name": "Ashgrove Property Trust",
+      "email": "finance@ashgrove.example",
+      "is_customer": true,
+      "is_supplier": false
+    },
+    {
+      "contact_id": "c2000000-0000-4000-8000-000000000001",
+      "name": "Meridian Surveying Pty Ltd",
+      "email": "billing@meridiansurvey.example",
+      "is_customer": false,
+      "is_supplier": true
+    },
+    {
+      "contact_id": "c2000000-0000-4000-8000-000000000002",
+      "name": "Coastal Concrete Supplies",
+      "email": "accounts@coastalconcrete.example",
+      "is_customer": false,
+      "is_supplier": true
+    }
+  ]
+}

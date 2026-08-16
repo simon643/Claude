@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xerobk</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --line: #e2e6ec;
+    --ink: #14181f;
+    --muted: #626b7a;
+    --accent: #13657f;
+    --critical: #b3261e;
+    --warning: #9a6400;
+    --ok: #1d6f42;
+    --chip: #eef1f5;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151a;
+      --panel: #1a1e25;
+      --line: #2b323c;
+      --ink: #e8ebf0;
+      --muted: #9aa4b2;
+      --accent: #5cc2e0;
+      --critical: #ef8078;
+      --warning: #e0b050;
+      --ok: #66c98d;
+      --chip: #242a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 22px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  header .org { font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  .badge {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted);
+  }
+  nav { display: flex; gap: 4px; padding: 10px 18px 0; flex-wrap: wrap; }
+  nav button {
+    font: inherit; font-size: 14px; border: 1px solid transparent; background: none;
+    color: var(--muted); padding: 7px 14px; border-radius: var(--radius) var(--radius) 0 0; cursor: pointer;
+  }
+  nav button[aria-selected="true"] {
+    background: var(--panel); color: var(--ink); border-color: var(--line); border-bottom-color: var(--panel);
+    font-weight: 600;
+  }
+  main { padding: 0 18px 40px; }
+  section { display: none; }
+  section.active { display: block; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px; margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .tile .label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tile .value { font-size: 24px; font-weight: 650; margin-top: 4px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tile.alert .value { color: var(--critical); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  .scroll { overflow-x: auto; }
+  .bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--chip); margin: 6px 0 14px; }
+  .bar span { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+  .finding { border-left: 3px solid var(--line); padding: 10px 0 10px 14px; margin-bottom: 16px; }
+  .finding.critical { border-left-color: var(--critical); }
+  .finding.warning { border-left-color: var(--warning); }
+  .finding.info { border-left-color: var(--accent); }
+  .finding h3 { margin: 0 0 4px; font-size: 15px; }
+  .finding p { margin: 0 0 6px; color: var(--muted); font-size: 14px; }
+  .finding .action { color: var(--ink); font-size: 13px; }
+  .finding ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+  .sev { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  .sev.critical { color: var(--critical); }
+  .sev.warning { color: var(--warning); }
+  .sev.info { color: var(--accent); }
+  .conf { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .conf.high { color: var(--ok); }
+  .conf.mid { color: var(--warning); }
+  .conf.low { color: var(--critical); }
+  .reasons { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  button.action-btn {
+    font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer;
+  }
+  button.action-btn:hover { border-color: var(--accent); }
+  button.action-btn:disabled { opacity: .5; cursor: default; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: var(--radius); padding: 28px;
+    text-align: center; color: var(--muted); cursor: pointer;
+  }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  .err { color: var(--critical); font-size: 14px; }
+  .toast {
+    position: fixed; bottom: 18px; right: 18px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 16px;
+    font-size: 14px; box-shadow: 0 6px 24px rgba(0,0,0,.14); opacity: 0; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>xerobk</h1>
+  <span class="org" id="org-name">loading…</span>
+  <span class="meta" id="org-meta"></span>
+  <span class="badge" id="source-badge"></span>
+</header>
+
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-tab="dashboard">Dashboard</button>
+  <button role="tab" aria-selected="false" data-tab="receivables">Receivables</button>
+  <button role="tab" aria-selected="false" data-tab="reconcile">Reconcile</button>
+  <button role="tab" aria-selected="false" data-tab="close">Close</button>
+</nav>
+
+<main>
+  <section id="dashboard" class="active">
+    <div class="tiles" id="tiles"></div>
+    <div class="panel">
+      <h2>Receivables ageing</h2>
+      <div class="bar" id="age-bar"></div>
+      <div class="legend" id="age-legend"></div>
+    </div>
+    <div class="panel">
+      <h2>Top debtors</h2>
+      <div class="scroll"><table id="debtors"></table></div>
+    </div>
+    <div class="panel">
+      <h2>Due in the next 14 days</h2>
+      <div class="scroll"><table id="due-soon"></table></div>
+    </div>
+  </section>
+
+  <section id="receivables">
+    <div class="panel">
+      <h2>Outstanding invoices, oldest first</h2>
+      <div class="scroll"><table id="aged-table"></table></div>
+    </div>
+  </section>
+
+  <section id="reconcile">
+    <div class="panel">
+      <h2>Import a bank statement</h2>
+      <div class="drop" id="drop">
+        Drop a bank statement CSV here, or click to choose one.
+        <br><small>Nothing is uploaded anywhere — the file is parsed by the local process.</small>
+      </div>
+      <input type="file" id="file" accept=".csv,text/csv" hidden>
+    </div>
+    <div class="panel" id="recon-stats-panel" hidden>
+      <h2>Suggestions</h2>
+      <div class="tiles" id="recon-stats"></div>
+    </div>
+    <div class="panel">
+      <div class="scroll"><table id="recon-table"></table></div>
+    </div>
+  </section>
+
+  <section id="close">
+    <div class="panel">
+      <h2 id="close-heading">Close checklist</h2>
+      <div id="close-summary"></div>
+    </div>
+    <div class="panel" id="close-findings"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "__SESSION_TOKEN__";
+const state = { dashboard: null, currency: "AUD" };
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { "X-Session-Token": TOKEN, ...(options.headers || {}) },
+  });
+  const data = await response.json().catch(() => ({ error: "malformed response" }));
+  if (!response.ok) throw new Error(data.error || `request failed (${response.status})`);
+  return data;
+}
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === "class") node.className = value;
+    else if (key === "html") node.innerHTML = value;
+    else if (value !== null && value !== undefined) node.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child === null || child === undefined) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+
+function table(headers, rows) {
+  const thead = el("thead", {}, el("tr", {}, headers.map(h =>
+    el("th", { class: h.num ? "num" : "" }, h.label))));
+  const tbody = el("tbody", {}, rows.length
+    ? rows.map(cells => el("tr", {}, cells.map((cell, i) =>
+        el("td", { class: headers[i] && headers[i].num ? "num" : "" }, cell))))
+    : el("tr", {}, el("td", { colspan: headers.length, class: "empty" }, "Nothing to show.")));
+  return [thead, tbody];
+}
+
+function toast(message) {
+  const node = document.getElementById("toast");
+  node.textContent = message;
+  node.classList.add("show");
+  setTimeout(() => node.classList.remove("show"), 2600);
+}
+
+function confidenceClass(value) {
+  if (value >= 90) return "high";
+  if (value >= 60) return "mid";
+  return "low";
+}
+
+// --- dashboard -----------------------------------------------------------
+
+const BUCKET_COLOURS = ["#1d6f42", "#63924a", "#c8a13a", "#c47a2c", "#b8542a", "#b3261e"];
+
+async function loadDashboard() {
+  const data = await api("/api/dashboard");
+  state.dashboard = data;
+  state.currency = data.organisation.currency;
+
+  document.getElementById("org-name").textContent = data.organisation.name || "(unnamed org)";
+  const fy = data.organisation.financial_year_start
+    ? ` · FY ${data.organisation.financial_year_start} → ${data.organisation.financial_year_end}`
+    : "";
+  document.getElementById("org-meta").textContent =
+    `${data.organisation.country} · ${data.organisation.currency}${fy} · as at ${data.as_of}`;
+  document.getElementById("source-badge").textContent =
+    `${data.source} · ${data.can_write ? "read/write" : "read-only"}`;
+
+  const h = data.headline;
+  const tiles = [
+    { label: "Cash", value: h.cash_display, sub: "bank balance", alert: Number(h.cash) === 0 },
+    { label: "Owed to you", value: h.receivables_display, sub: `${h.overdue_share}% overdue` },
+    { label: "You owe", value: h.payables_display, sub: "accounts payable" },
+    { label: "Overdue", value: h.overdue_display, sub: "past due date", alert: Number(h.overdue) > 0 },
+    { label: "Net position", value: h.net_position_display, sub: "cash + owed − owing" },
+    { label: "Drafts", value: String(h.draft_count), sub: "not yet in the ledger" },
+  ];
+  document.getElementById("tiles").replaceChildren(...tiles.map(t =>
+    el("div", { class: `tile${t.alert ? " alert" : ""}` },
+      el("div", { class: "label" }, t.label),
+      el("div", { class: "value" }, t.value),
+      el("div", { class: "sub" }, t.sub))));
+
+  const total = Number(h.receivables) || 1;
+  document.getElementById("age-bar").replaceChildren(...data.receivable_buckets.map((b, i) => {
+    const span = el("span");
+    span.style.width = `${(Number(b.value) / total) * 100}%`;
+    span.style.background = BUCKET_COLOURS[i];
+    span.title = `${b.label}: ${b.display}`;
+    return span;
+  }));
+  document.getElementById("age-legend").replaceChildren(...data.receivable_buckets
+    .filter(b => Number(b.value) > 0)
+    .map((b, i) => {
+      const idx = data.receivable_buckets.indexOf(b);
+      const swatch = el("i");
+      swatch.style.background = BUCKET_COLOURS[idx];
+      return el("span", {}, swatch, `${b.label} — ${b.display} (${b.share}%)`);
+    }));
+
+  document.getElementById("debtors").replaceChildren(...table(
+    [{ label: "Customer" }, { label: "Email" }, { label: "Invoices", num: true },
+     { label: "Oldest (days)", num: true }, { label: "Owed", num: true }, { label: "Share", num: true }],
+    data.top_debtors.map(d => [
+      d.name, d.email || "— none on file —", d.invoice_count,
+      d.oldest_days > 0 ? d.oldest_days : "not due", d.total_display, `${d.share}%`,
+    ])));
+
+  document.getElementById("due-soon").replaceChildren(...table(
+    [{ label: "Invoice" }, { label: "Customer" }, { label: "Reference" },
+     { label: "Due" }, { label: "Amount", num: true }],
+    data.due_soon.map(i => [i.invoice_number, i.contact, i.reference || "—", i.due_date, i.amount_due_display])));
+}
+
+async function loadReceivables() {
+  const data = await api("/api/aged");
+  document.getElementById("aged-table").replaceChildren(...table(
+    [{ label: "Invoice" }, { label: "Customer" }, { label: "Reference" }, { label: "Due" },
+     { label: "Bucket" }, { label: "Days", num: true }, { label: "Amount", num: true }],
+    data.rows.map(r => [
+      r.document_number || "—",
+      (r.contact && r.contact.name) || "—",
+      r.document_reference || "—",
+      r.due_date || "—",
+      r.bucket_label || "—",
+      r.days_overdue !== undefined ? r.days_overdue : "—",
+      formatMoney(r.total),
+    ])));
+}
+
+function formatMoney(value) {
+  const number = Number(value || 0);
+  const sign = number < 0 ? "-" : "";
+  return `${sign}$${Math.abs(number).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// --- reconcile -----------------------------------------------------------
+
+async function loadReconcile() {
+  const data = await api("/api/reconcile");
+  const statsPanel = document.getElementById("recon-stats-panel");
+
+  if (data.stats) {
+    statsPanel.hidden = false;
+    const s = data.stats;
+    document.getElementById("recon-stats").replaceChildren(...[
+      { label: "Lines", value: s.total, sub: "imported" },
+      { label: "Confident", value: s.confident, sub: `${s.auto_rate}% of lines` },
+      { label: "Need review", value: s.review, sub: "ambiguous or low confidence" },
+      { label: "No suggestion", value: s.unknown, sub: "code these by hand" },
+    ].map(t => el("div", { class: "tile" },
+      el("div", { class: "label" }, t.label),
+      el("div", { class: "value" }, String(t.value)),
+      el("div", { class: "sub" }, t.sub))));
+  } else {
+    statsPanel.hidden = true;
+  }
+
+  const rows = data.suggestions.map(s => {
+    const detail = el("div", {},
+      el("div", {}, s.summary),
+      el("div", { class: "reasons" }, s.reasons.join(" · ")));
+
+    const accept = el("button", { class: "action-btn" }, s.already_coded ? "Coded" : "Accept");
+    accept.disabled = Boolean(s.already_coded) || s.kind === "unknown";
+    accept.addEventListener("click", async () => {
+      accept.disabled = true;
+      try {
+        await api("/api/coding", {
+          method: "POST",
+          body: JSON.stringify({
+            line_id: s.line_id,
+            account_code: s.account_code,
+            tax_type: s.tax_type,
+            contact_name: s.contact_name,
+            invoice_ids: s.invoices.map(i => i.invoice_id),
+            confidence: s.confidence,
+            decided_by: s.kind === "match" ? "match" : "rule",
+          }),
+        });
+        accept.textContent = "Coded";
+        toast("Coding recorded locally.");
+      } catch (error) {
+        accept.disabled = false;
+        toast(error.message);
+      }
+    });
+
+    return [
+      s.date || "—",
+      s.description || "—",
+      formatMoney(s.amount),
+      detail,
+      el("span", { class: `conf ${confidenceClass(s.confidence)}` }, `${s.confidence}%`),
+      accept,
+    ];
+  });
+
+  document.getElementById("recon-table").replaceChildren(...table(
+    [{ label: "Date" }, { label: "Narrative" }, { label: "Amount", num: true },
+     { label: "Suggestion" }, { label: "Confidence", num: true }, { label: "" }],
+    rows));
+
+  if (data.message) toast(data.message);
+}
+
+function wireImport() {
+  const drop = document.getElementById("drop");
+  const input = document.getElementById("file");
+
+  const send = async (file) => {
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const result = await api("/api/import", { method: "POST", body: text });
+      toast(`Imported ${result.imported} bank line(s).`);
+      await loadReconcile();
+    } catch (error) {
+      toast(error.message);
+    }
+  };
+
+  drop.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => send(input.files[0]));
+  drop.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    drop.classList.add("over");
+  });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (event) => {
+    event.preventDefault();
+    drop.classList.remove("over");
+    send(event.dataTransfer.files[0]);
+  });
+}
+
+// --- close ---------------------------------------------------------------
+
+async function loadClose() {
+  const data = await api("/api/close");
+  const p = data.period;
+  document.getElementById("close-heading").textContent = `Close checklist — ${p.label}`;
+
+  const due = p.due ? ` · earliest lodgement due ${p.due}` : "";
+  document.getElementById("close-summary").replaceChildren(
+    el("p", {}, `Period ${p.start} → ${p.end}${due}`),
+    el("p", {},
+      el("strong", { class: data.is_clean ? "" : "err" },
+        data.is_clean ? "No blockers found." : `${data.counts.critical} blocker(s) to resolve.`),
+      ` ${data.counts.warning} warning(s), ${data.counts.info} note(s).`));
+
+  document.getElementById("close-findings").replaceChildren(...data.findings.map(f =>
+    el("div", { class: `finding ${f.severity}` },
+      el("div", { class: `sev ${f.severity}` }, f.severity),
+      el("h3", {}, f.title),
+      el("p", {}, f.detail),
+      f.action ? el("div", { class: "action" }, f.action) : null,
+      f.items && f.items.length
+        ? el("ul", {}, f.items.map(item => el("li", {}, item)))
+        : null)));
+}
+
+// --- boot ----------------------------------------------------------------
+
+const LOADERS = {
+  dashboard: loadDashboard,
+  receivables: loadReceivables,
+  reconcile: loadReconcile,
+  close: loadClose,
+};
+const loaded = new Set();
+
+async function show(tab) {
+  for (const button of document.querySelectorAll("nav button")) {
+    button.setAttribute("aria-selected", String(button.dataset.tab === tab));
+  }
+  for (const section of document.querySelectorAll("main section")) {
+    section.classList.toggle("active", section.id === tab);
+  }
+  if (!loaded.has(tab)) {
+    try {
+      await LOADERS[tab]();
+      loaded.add(tab);
+    } catch (error) {
+      document.getElementById(tab).prepend(
+        el("div", { class: "panel err" }, `Could not load: ${error.message}`));
+    }
+  }
+}
+
+for (const button of document.querySelectorAll("nav button")) {
+  button.addEventListener("click", () => show(button.dataset.tab));
+}
+
+wireImport();
+show("dashboard");
+</script>
+</body>
+</html>
