@@ -261,3 +261,67 @@ class TestStore:
 
             assert errors == []
             assert len(store.coded_line_ids()) == 12
+
+
+class TestOAuthScopes:
+    """Xero rejects a consent request that asks for both variants of a scope.
+
+    A read-write scope already grants read, so `accounting.transactions` and
+    `accounting.transactions.read` are alternatives. Requesting both returns
+    `invalid_scope` from the consent screen — which only shows up against the
+    real Xero, so it is pinned here.
+    """
+
+    def test_read_only_scopes_have_no_duplicate_pairs(self) -> None:
+        from xerobk.config import Settings
+
+        scopes = Settings(allow_writes=False).scopes()
+        assert not [s for s in scopes if f"{s}.read" in scopes]
+
+    def test_write_scopes_have_no_duplicate_pairs(self) -> None:
+        from xerobk.config import Settings
+
+        scopes = Settings(allow_writes=True).scopes()
+        assert not [s for s in scopes if f"{s}.read" in scopes], (
+            "requesting a scope and its .read twin together is rejected by Xero"
+        )
+
+    def test_write_mode_replaces_the_read_variants(self) -> None:
+        from xerobk.config import Settings
+
+        scopes = Settings(allow_writes=True).scopes()
+        assert "accounting.transactions" in scopes
+        assert "accounting.transactions.read" not in scopes
+        assert "accounting.contacts" in scopes
+        assert "accounting.contacts.read" not in scopes
+
+    def test_refresh_tokens_are_always_requested(self) -> None:
+        # Without offline_access there is no refresh token and the connection
+        # dies after 30 minutes.
+        from xerobk.config import Settings
+
+        for allow in (False, True):
+            assert "offline_access" in Settings(allow_writes=allow).scopes()
+
+    def test_settings_stay_read_only_even_in_write_mode(self) -> None:
+        # Nothing here writes organisation settings, so do not ask for it.
+        from xerobk.config import Settings
+
+        scopes = Settings(allow_writes=True).scopes()
+        assert "accounting.settings.read" in scopes
+        assert "accounting.settings" not in scopes
+
+    def test_every_scope_is_one_xero_actually_defines(self) -> None:
+        from xerobk.config import READ_SCOPES, WRITE_SCOPES
+
+        valid = {
+            "offline_access", "openid", "profile", "email",
+            "accounting.transactions", "accounting.transactions.read",
+            "accounting.contacts", "accounting.contacts.read",
+            "accounting.settings", "accounting.settings.read",
+            "accounting.reports.read", "accounting.journals.read",
+            "accounting.attachments", "accounting.attachments.read",
+            "accounting.budgets.read",
+        }
+        for scope in set(READ_SCOPES) | set(WRITE_SCOPES):
+            assert scope in valid, f"{scope} is not a Xero scope"

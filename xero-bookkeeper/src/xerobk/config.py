@@ -22,14 +22,25 @@ XERO_API_BASE = "https://api.xero.com/api.xro/2.0"
 
 # Read-only by default. Write scopes are only requested when the user opts in
 # with `--allow-writes`, so an accidental run can never mutate the ledger.
-READ_SCOPES = (
+#
+# A read-write scope already grants read access, so the two variants are
+# alternatives, not additions. Requesting `accounting.transactions` alongside
+# `accounting.transactions.read` is rejected by Xero's consent screen with
+# `invalid_scope` — the write scope REPLACES its read twin rather than joining
+# it. `accounting.settings.read` stays read-only in both modes because nothing
+# here ever writes organisation settings.
+BASE_SCOPES = (
     "offline_access",
     "accounting.reports.read",
-    "accounting.transactions.read",
-    "accounting.contacts.read",
     "accounting.settings.read",
 )
+READ_SCOPES = (
+    *BASE_SCOPES,
+    "accounting.transactions.read",
+    "accounting.contacts.read",
+)
 WRITE_SCOPES = (
+    *BASE_SCOPES,
     "accounting.transactions",
     "accounting.contacts",
 )
@@ -108,7 +119,7 @@ class Settings:
         return bool(self.client_id)
 
     def scopes(self) -> tuple[str, ...]:
-        return READ_SCOPES + (WRITE_SCOPES if self.allow_writes else ())
+        return WRITE_SCOPES if self.allow_writes else READ_SCOPES
 
     @classmethod
     def load(cls) -> Settings:
