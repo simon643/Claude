@@ -282,7 +282,10 @@ def cmd_connect(args: argparse.Namespace) -> int:
         )
         return 2
 
-    scopes = settings.scopes()
+    # --scopes exists to diagnose `invalid_scope`, which Xero reports without
+    # naming the offending scope. Overriding the set makes it possible to
+    # bisect by hand instead of editing the source between attempts.
+    scopes = tuple(args.scopes.split()) if args.scopes else settings.scopes()
     print(f"requesting scopes: {' '.join(scopes)}")
     try:
         tokens = authorize(settings.client_id, scopes, port=args.port)
@@ -678,6 +681,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("connect", help="authorise this machine against a Xero organisation")
     p.add_argument("--allow-writes", action="store_true", help="also request write scopes")
     p.add_argument("--port", type=int, default=8720, help="local port for the OAuth redirect")
+    p.add_argument(
+        "--scopes", metavar="LIST",
+        help='space-separated scopes to request instead of the defaults, for '
+             'diagnosing invalid_scope (e.g. "offline_access accounting.transactions.read")',
+    )
     p.set_defaults(func=cmd_connect)
 
     p = sub.add_parser("snapshot", parents=[common], help="dump the ledger to a local snapshot directory")
