@@ -1,0 +1,31 @@
+# Never commit real financial data or credentials.
+# `xerobk snapshot` writes real ledger data; keep every snapshot out of git
+# except the synthetic one under data/demo/.
+snapshots/
+*.snapshot/
+token.json
+config.json
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+rules.json
+
+# Real bank statements
+*.csv
+!data/demo/bank_lines.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

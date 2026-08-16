@@ -1,0 +1,16 @@
+{
+  "name": "Wattlebird Developments Unit Trust",
+  "legal_name": "Wattlebird Developments Pty Ltd",
+  "organisation_type": "TRUST",
+  "region": "AU",
+  "country": "AU",
+  "base_currency": "AUD",
+  "timezone": {
+    "tz_name": "Australia/Sydney",
+    "utc_offset": "+10"
+  },
+  "line_of_business": "Residential Property Operators",
+  "company_registration_number": "00000000000",
+  "financial_year_start_date": "2026-07-01",
+  "financial_year_end_date": "2027-06-30"
+}

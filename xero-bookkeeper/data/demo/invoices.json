@@ -1,0 +1,452 @@
+{
+  "invoices": [
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000001",
+      "invoice_number": "DEMO-1012",
+      "reference": "18 Pelican Rise (Base Stage)",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000001",
+        "name": "Harbourline Constructions Pty Ltd",
+        "email": "accounts@harbourline.example"
+      },
+      "amount_total": "148500.00",
+      "amount_due": "148500.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "135000.00",
+      "amount_tax": "13500.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2025-12-04",
+      "due_date": "2025-12-18",
+      "line_items": [
+        {
+          "description": "18 Pelican Rise (Base Stage)",
+          "quantity": "1.0",
+          "unit_amount": "148500.00",
+          "line_amount_gross": "148500.00",
+          "line_tax_amount": "13500.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000002",
+      "invoice_number": "DEMO-1019",
+      "reference": "18 Pelican Rise (Frame)",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000001",
+        "name": "Harbourline Constructions Pty Ltd",
+        "email": "accounts@harbourline.example"
+      },
+      "amount_total": "121000.00",
+      "amount_due": "121000.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "110000.00",
+      "amount_tax": "11000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-02-12",
+      "due_date": "2026-02-26",
+      "line_items": [
+        {
+          "description": "18 Pelican Rise (Frame)",
+          "quantity": "1.0",
+          "unit_amount": "121000.00",
+          "line_amount_gross": "121000.00",
+          "line_tax_amount": "11000.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000003",
+      "invoice_number": "DEMO-1024",
+      "reference": "7 Wattle Court (Base Stage)",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000003",
+        "name": "Kestrel Build Group Pty Ltd",
+        "email": "ap@kestrelbuild.example"
+      },
+      "amount_total": "88000.00",
+      "amount_due": "88000.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "80000.00",
+      "amount_tax": "8000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-03-19",
+      "due_date": "2026-04-02",
+      "line_items": [
+        {
+          "description": "7 Wattle Court (Base Stage)",
+          "quantity": "1.0",
+          "unit_amount": "88000.00",
+          "line_amount_gross": "88000.00",
+          "line_tax_amount": "8000.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000004",
+      "invoice_number": "DEMO-1031",
+      "reference": "Feasibility & concept design",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000004",
+        "name": "Verity Projects Pty Ltd",
+        "email": null
+      },
+      "amount_total": "23650.00",
+      "amount_due": "23650.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "21500.00",
+      "amount_tax": "2150.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-04-08",
+      "due_date": null,
+      "line_items": [
+        {
+          "description": "Feasibility & concept design",
+          "quantity": "1.0",
+          "unit_amount": "23650.00",
+          "line_amount_gross": "23650.00",
+          "line_tax_amount": "2150.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000005",
+      "invoice_number": "DEMO-1036",
+      "reference": "18 Pelican Rise (Lockup)",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000001",
+        "name": "Harbourline Constructions Pty Ltd",
+        "email": "accounts@harbourline.example"
+      },
+      "amount_total": "165000.00",
+      "amount_due": "165000.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "150000.00",
+      "amount_tax": "15000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-05-14",
+      "due_date": "2026-05-28",
+      "line_items": [
+        {
+          "description": "18 Pelican Rise (Lockup)",
+          "quantity": "1.0",
+          "unit_amount": "165000.00",
+          "line_amount_gross": "165000.00",
+          "line_tax_amount": "15000.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000006",
+      "invoice_number": "DEMO-1042",
+      "reference": "Kennaway Rd subdivision \u2014 stage 1",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000005",
+        "name": "Ashgrove Property Trust",
+        "email": "finance@ashgrove.example"
+      },
+      "amount_total": "44000.00",
+      "amount_due": "44000.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "40000.00",
+      "amount_tax": "4000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-06-11",
+      "due_date": "2026-06-25",
+      "line_items": [
+        {
+          "description": "Kennaway Rd subdivision \u2014 stage 1",
+          "quantity": "1.0",
+          "unit_amount": "44000.00",
+          "line_amount_gross": "44000.00",
+          "line_tax_amount": "4000.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000007",
+      "invoice_number": "DEMO-1043",
+      "reference": "Kennaway Rd subdivision \u2014 stage 1",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000005",
+        "name": "Ashgrove Property Trust",
+        "email": "finance@ashgrove.example"
+      },
+      "amount_total": "44000.00",
+      "amount_due": "44000.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "40000.00",
+      "amount_tax": "4000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-06-16",
+      "due_date": "2026-06-30",
+      "line_items": [
+        {
+          "description": "Kennaway Rd subdivision \u2014 stage 1",
+          "quantity": "1.0",
+          "unit_amount": "44000.00",
+          "line_amount_gross": "44000.00",
+          "line_tax_amount": "4000.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000008",
+      "invoice_number": "DEMO-1048",
+      "reference": "7 Wattle Court (Frame)",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000003",
+        "name": "Kestrel Build Group Pty Ltd",
+        "email": "ap@kestrelbuild.example"
+      },
+      "amount_total": "96800.00",
+      "amount_due": "96800.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "88000.00",
+      "amount_tax": "0.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-07-09",
+      "due_date": "2026-07-23",
+      "line_items": [
+        {
+          "description": "7 Wattle Court (Frame)",
+          "quantity": "1.0",
+          "unit_amount": "96800.00",
+          "line_amount_gross": "96800.00",
+          "line_tax_amount": "8800.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000009",
+      "invoice_number": "DEMO-1051",
+      "reference": "22 Ferngully Way (Base Stage)",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000001",
+        "name": "Harbourline Constructions Pty Ltd",
+        "email": "accounts@harbourline.example"
+      },
+      "amount_total": "132000.00",
+      "amount_due": "132000.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "120000.00",
+      "amount_tax": "12000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-07-28",
+      "due_date": "2026-08-11",
+      "line_items": [
+        {
+          "description": "22 Ferngully Way (Base Stage)",
+          "quantity": "1.0",
+          "unit_amount": "132000.00",
+          "line_amount_gross": "132000.00",
+          "line_tax_amount": "12000.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000010",
+      "invoice_number": "DEMO-1053",
+      "reference": "Kennaway Rd subdivision \u2014 stage 2",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000005",
+        "name": "Ashgrove Property Trust",
+        "email": "finance@ashgrove.example"
+      },
+      "amount_total": "57200.00",
+      "amount_due": "57200.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "52000.00",
+      "amount_tax": "5200.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-08-06",
+      "due_date": "2026-08-20",
+      "line_items": [
+        {
+          "description": "Kennaway Rd subdivision \u2014 stage 2",
+          "quantity": "1.0",
+          "unit_amount": "57200.00",
+          "line_amount_gross": "57200.00",
+          "line_tax_amount": "5200.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000011",
+      "invoice_number": "DEMO-1054",
+      "reference": "Site establishment",
+      "status": "AUTHORISED",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000004",
+        "name": "Verity Projects Pty Ltd",
+        "email": null
+      },
+      "amount_total": "18150.00",
+      "amount_due": "18150.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "16500.00",
+      "amount_tax": "1650.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-08-12",
+      "due_date": "2026-08-26",
+      "line_items": [
+        {
+          "description": "Site establishment",
+          "quantity": "1.0",
+          "unit_amount": "18150.00",
+          "line_amount_gross": "18150.00",
+          "line_tax_amount": "1650.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000012",
+      "invoice_number": "DEMO-1055",
+      "reference": "7 Wattle Court (Lockup)",
+      "status": "DRAFT",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000003",
+        "name": "Kestrel Build Group Pty Ltd",
+        "email": "ap@kestrelbuild.example"
+      },
+      "amount_total": "104500.00",
+      "amount_due": "104500.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "95000.00",
+      "amount_tax": "9500.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-08-14",
+      "due_date": "2026-08-28",
+      "line_items": [
+        {
+          "description": "7 Wattle Court (Lockup)",
+          "quantity": "1.0",
+          "unit_amount": "104500.00",
+          "line_amount_gross": "104500.00",
+          "line_tax_amount": "9500.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000013",
+      "invoice_number": "DEMO-1009",
+      "reference": "Ashgrove staging fee",
+      "status": "PAID",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000005",
+        "name": "Ashgrove Property Trust",
+        "email": "finance@ashgrove.example"
+      },
+      "amount_total": "26400.00",
+      "amount_due": "0.00",
+      "amount_paid": "26400.00",
+      "amount_credited": "0.00",
+      "amount_net": "24000.00",
+      "amount_tax": "2400.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2025-10-02",
+      "due_date": "2025-10-16",
+      "line_items": [
+        {
+          "description": "Ashgrove staging fee",
+          "quantity": "1.0",
+          "unit_amount": "26400.00",
+          "line_amount_gross": "26400.00",
+          "line_tax_amount": "2400.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "a0000000-0000-4000-8000-000000000014",
+      "invoice_number": "DEMO-1017",
+      "reference": "Preliminary works",
+      "status": "PAID",
+      "type": "ACCREC",
+      "contact": {
+        "contact_id": "c1000000-0000-4000-8000-000000000003",
+        "name": "Kestrel Build Group Pty Ltd",
+        "email": "ap@kestrelbuild.example"
+      },
+      "amount_total": "35200.00",
+      "amount_due": "0.00",
+      "amount_paid": "35200.00",
+      "amount_credited": "0.00",
+      "amount_net": "32000.00",
+      "amount_tax": "3200.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-01-22",
+      "due_date": "2026-02-05",
+      "line_items": [
+        {
+          "description": "Preliminary works",
+          "quantity": "1.0",
+          "unit_amount": "35200.00",
+          "line_amount_gross": "35200.00",
+          "line_tax_amount": "3200.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    }
+  ]
+}

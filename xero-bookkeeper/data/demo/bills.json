@@ -1,0 +1,132 @@
+{
+  "invoices": [
+    {
+      "invoice_id": "b0000000-0000-4000-8000-000000000001",
+      "invoice_number": "BILL-4471",
+      "reference": "Detail survey \u2014 Pelican Rise",
+      "status": "AUTHORISED",
+      "type": "ACCPAY",
+      "contact": {
+        "contact_id": "c2000000-0000-4000-8000-000000000001",
+        "name": "Meridian Surveying Pty Ltd",
+        "email": "billing@meridiansurvey.example"
+      },
+      "amount_total": "9350.00",
+      "amount_due": "9350.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "8500.00",
+      "amount_tax": "850.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-06-30",
+      "due_date": "2026-07-30",
+      "line_items": [
+        {
+          "description": "Detail survey \u2014 Pelican Rise",
+          "quantity": "1.0",
+          "unit_amount": "9350.00",
+          "line_amount_gross": "9350.00",
+          "line_tax_amount": "850.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "b0000000-0000-4000-8000-000000000002",
+      "invoice_number": "BILL-4488",
+      "reference": "Concrete supply \u2014 Wattle Court",
+      "status": "AUTHORISED",
+      "type": "ACCPAY",
+      "contact": {
+        "contact_id": "c2000000-0000-4000-8000-000000000002",
+        "name": "Coastal Concrete Supplies",
+        "email": "accounts@coastalconcrete.example"
+      },
+      "amount_total": "27500.00",
+      "amount_due": "27500.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "25000.00",
+      "amount_tax": "2500.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-07-14",
+      "due_date": "2026-08-13",
+      "line_items": [
+        {
+          "description": "Concrete supply \u2014 Wattle Court",
+          "quantity": "1.0",
+          "unit_amount": "27500.00",
+          "line_amount_gross": "27500.00",
+          "line_tax_amount": "2500.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "b0000000-0000-4000-8000-000000000003",
+      "invoice_number": "BILL-4501",
+      "reference": "Contour & feature survey",
+      "status": "AUTHORISED",
+      "type": "ACCPAY",
+      "contact": {
+        "contact_id": "c2000000-0000-4000-8000-000000000001",
+        "name": "Meridian Surveying Pty Ltd",
+        "email": "billing@meridiansurvey.example"
+      },
+      "amount_total": "5060.00",
+      "amount_due": "5060.00",
+      "amount_paid": "0.00",
+      "amount_credited": "0.00",
+      "amount_net": "4600.00",
+      "amount_tax": "460.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-08-03",
+      "due_date": "2026-09-02",
+      "line_items": [
+        {
+          "description": "Contour & feature survey",
+          "quantity": "1.0",
+          "unit_amount": "5060.00",
+          "line_amount_gross": "5060.00",
+          "line_tax_amount": "460.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    },
+    {
+      "invoice_id": "b0000000-0000-4000-8000-000000000004",
+      "invoice_number": "BILL-4460",
+      "reference": "Concrete supply \u2014 Pelican Rise",
+      "status": "PAID",
+      "type": "ACCPAY",
+      "contact": {
+        "contact_id": "c2000000-0000-4000-8000-000000000002",
+        "name": "Coastal Concrete Supplies",
+        "email": "accounts@coastalconcrete.example"
+      },
+      "amount_total": "31900.00",
+      "amount_due": "0.00",
+      "amount_paid": "31900.00",
+      "amount_credited": "0.00",
+      "amount_net": "29000.00",
+      "amount_tax": "2900.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.0",
+      "invoice_date": "2026-05-28",
+      "due_date": "2026-06-27",
+      "line_items": [
+        {
+          "description": "Concrete supply \u2014 Pelican Rise",
+          "quantity": "1.0",
+          "unit_amount": "31900.00",
+          "line_amount_gross": "31900.00",
+          "line_tax_amount": "2900.00",
+          "line_tax_treatment": "Inclusive"
+        }
+      ]
+    }
+  ]
+}
