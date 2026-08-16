@@ -23,8 +23,19 @@ defaults:
   run:
     working-directory: xero-bookkeeper
 
+# A branch with an open PR matches both `push` and `pull_request`, so every job
+# would run twice on the same commit. Skipping push events on non-default
+# branches leaves `pull_request` to cover feature branches and `push` to cover
+# what actually lands. Reading default_branch from the event keeps this correct
+# if the branch is ever renamed — the sibling ci.yml hardcoded `main` and has
+# silently never run since. (Repeated per job: the `env` context is not
+# available in a job-level `if`, so this cannot be hoisted into a variable.)
+
 jobs:
   test:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -76,6 +87,9 @@ jobs:
           fi
 
   demo-data:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     # The demo snapshot is generated, so it can silently drift from its
     # generator. Regenerating and diffing keeps the committed JSON honest.
     runs-on: ubuntu-latest
@@ -90,6 +104,9 @@ jobs:
         run: git diff --exit-code -- data/demo
 
   no-real-data:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     # xerobk handles real financial data and OAuth tokens. This is a tripwire
     # against committing any of it, since .gitignore only protects files that
     # were never force-added.
