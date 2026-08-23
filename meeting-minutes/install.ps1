@@ -78,7 +78,25 @@ rem Starts minutely and opens it in your browser. Close this window to stop it.
 cd /d "%~dp0"
 ".venv\Scripts\minutely.exe" record
 "@ | Set-Content -Path $launcher -Encoding ASCII
-Write-Host "OK  created start-minutely.bat - double-click it to start recording"
+Write-Host "OK  created start-minutely.bat"
+
+# ...and an icon on the Desktop, which is what most people actually want.
+# GetFolderPath rather than "$HOME\Desktop": with OneDrive backup turned on,
+# the real Desktop lives under OneDrive and the literal path is wrong.
+$desktop = [Environment]::GetFolderPath("Desktop")
+$icon = Join-Path $PSScriptRoot "assets\minutely.ico"
+$shell = New-Object -ComObject WScript.Shell
+$shortcut = $shell.CreateShortcut((Join-Path $desktop "minutely.lnk"))
+$shortcut.TargetPath = $venvApp
+$shortcut.Arguments = "record"
+$shortcut.WorkingDirectory = $PSScriptRoot
+$shortcut.Description = "Record a meeting and turn it into minutes"
+# Minimised: the console must stay open while the app runs, but the browser is
+# the actual interface, so it belongs in the taskbar rather than in the way.
+$shortcut.WindowStyle = 7
+if (Test-Path $icon) { $shortcut.IconLocation = $icon }
+$shortcut.Save()
+Write-Host "OK  put a 'minutely' icon on your Desktop"
 
 # -- 5. prove it works ------------------------------------------------------
 Write-Host ""
@@ -89,6 +107,6 @@ Write-Host "------------------------------------------------------------"
 Write-Host ""
 Write-Host "That was a bundled example - no microphone or network involved."
 Write-Host ""
-Write-Host "To record a real meeting, double-click start-minutely.bat"
+Write-Host "To record a real meeting, double-click the minutely icon on your Desktop."
 Write-Host ""
 Read-Host "Press Enter to close"

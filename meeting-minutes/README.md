@@ -42,9 +42,15 @@ powershell -ExecutionPolicy Bypass -File install.ps1    # Windows
 ```
 
 It ends by minuting a bundled sample meeting, so you can see the output before
-deciding whether the rest is worth setting up. Afterwards, start the recorder
-by double-clicking **Start minutely.command** (macOS), **start-minutely.bat**
-(Windows), or **start-minutely.sh** (Linux).
+deciding whether the rest is worth setting up.
+
+Afterwards you start the recorder by double-clicking:
+
+* **Windows** — the **minutely** icon the installer puts on your Desktop.
+  (`desktop-icon.ps1` puts it back if you delete it.)
+* **macOS** — **Start minutely.command** in this folder. Drag it to the Desktop
+  if you want it there.
+* **Linux** — **start-minutely.sh** in this folder.
 
 Prefer to do it by hand? It is a normal Python package:
 
