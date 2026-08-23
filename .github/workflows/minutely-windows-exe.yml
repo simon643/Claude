@@ -1,0 +1,72 @@
+name: minutely Windows build
+
+# Builds a single minutely.exe so that using this app on Windows needs no
+# Python install, no PATH surgery, and no virtual environment — the three
+# things that actually stop people getting started.
+#
+# The artifact lands on the run's summary page. Download, unzip, double-click.
+
+on:
+  push:
+    paths:
+      - "meeting-minutes/**"
+      - ".github/workflows/minutely-windows-exe.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: minutely-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: meeting-minutes
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # The oldest supported runtime: a binary frozen against 3.11 runs
+          # everywhere 3.11+ would have, and the reverse is not true.
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install pyinstaller .
+
+      - name: Build minutely.exe
+        shell: pwsh
+        run: |
+          pyinstaller --onefile --name minutely `
+            --paths src `
+            --icon assets/minutely.ico `
+            --add-data "src/minutely/ui;minutely/ui" `
+            --add-data "src/minutely/data;minutely/data" `
+            packaging/minutely_exe.py
+
+      # A binary that builds but cannot run is worse than no binary, because
+      # it fails on the user's machine instead of here. Exercise the packaged
+      # data files (the UI page and the demo transcript both live inside it).
+      - name: Smoke test the binary
+        shell: pwsh
+        env:
+          MINUTELY_HOME: ${{ runner.temp }}\minutely-home
+        run: |
+          .\dist\minutely.exe --version
+          .\dist\minutely.exe demo | Select-String "ACTION POINTS" -Quiet
+          if (-not $?) { throw "demo did not produce minutes" }
+          .\dist\minutely.exe templates | Select-String "standup" -Quiet
+          if (-not $?) { throw "templates missing from the bundle" }
+          .\dist\minutely.exe export --format html -o "$env:RUNNER_TEMP\m.html"
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\m.html" -Pattern "<!doctype html>" -Quiet)) {
+            throw "export produced nothing"
+          }
+          Write-Host "the binary works"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minutely-windows
+          path: meeting-minutes/dist/minutely.exe
+          if-no-files-found: error
