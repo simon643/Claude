@@ -13,6 +13,19 @@
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
 
+# Right-clicking a .ps1 and choosing "Run with PowerShell" closes the window
+# the instant the script ends. Without this, any unexpected error flashes past
+# unread and the whole thing looks like it silently did nothing — which is
+# exactly how one person ended up believing it had worked when it had not.
+trap {
+    Write-Host ""
+    Write-Host "X something unexpected went wrong:" -ForegroundColor Red
+    Write-Host "  $_" -ForegroundColor Red
+    Write-Host ""
+    Read-Host "Press Enter to close"
+    exit 1
+}
+
 function Fail($message) {
     Write-Host ""
     Write-Host "X $message" -ForegroundColor Red
@@ -40,9 +53,21 @@ foreach ($candidate in @("py -3.13", "py -3.12", "py -3.11", "py", "python3", "p
 }
 
 if (-not $python) {
-    Fail "no suitable Python found (need 3.11, 3.12 or 3.13).
-  Install one from https://www.python.org/downloads/ - tick 'Add Python to PATH'
-  on the first screen - then run this again."
+    # Say what the machine actually has. "No suitable Python" on a machine with
+    # three Pythons installed is a maddening thing to be told.
+    $installed = ""
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        $installed = (py -0p 2>&1 | Out-String).Trim()
+    }
+    $detail = if ($installed) { "What this machine has:`n$installed" } else { "No Python launcher (py) found at all." }
+    Fail "no Python between 3.11 and 3.13 that I can use.
+
+  $detail
+
+  Python 3.14 is not supported yet - it is newer than this app has been tested
+  against. Install 3.13 from https://www.python.org/downloads/release/python-3130/
+  (tick 'Add Python to PATH' on the first screen), then run this again.
+  Having 3.14 as well is fine; they sit side by side."
 }
 Write-Host "OK  using $python"
 
@@ -55,7 +80,11 @@ if (Test-Path ".venv") {
     if ($parts.Count -gt 1) { $arguments += $parts[1] }
     $arguments += @("-m", "venv", ".venv")
     & $parts[0] @arguments
-    if ($LASTEXITCODE -ne 0) { Fail "could not create the virtual environment." }
+    if ($LASTEXITCODE -ne 0) {
+        Fail "could not create the virtual environment (.venv) with $python.
+  The error above says why. A common cause is antivirus blocking writes into
+  the Downloads folder - try moving this folder to your Documents and re-running."
+    }
     Write-Host "OK  created .venv"
 }
 
