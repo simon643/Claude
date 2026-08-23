@@ -20,6 +20,13 @@ from .models import CERTAIN, ActionItem, Minutes, Transcript, format_duration
 
 FORMATS = ("md", "html", "txt", "json")
 
+# Mail clients strip <head>, ignore most stylesheets, and mangle anything
+# clever, so the email body is built separately from the printable page: inline
+# styles only, no colour scheme, no media queries.
+_EMAIL_BODY = "font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#17181c"
+_EMAIL_MUTED = "color:#5b6070;font-size:13px"
+_EMAIL_CELL = "padding:6px 8px;border-bottom:1px solid #e4e6eb;text-align:left;vertical-align:top"
+
 
 def render(
     minutes: Minutes,
@@ -288,6 +295,90 @@ def to_html(
 
     parts.append(f"<footer>{esc(_footer(minutes))}</footer></body></html>")
     return "\n".join(parts)
+
+
+# --------------------------------------------------------------------------
+# Email
+# --------------------------------------------------------------------------
+
+
+def email_subject(minutes: Minutes) -> str:
+    title = minutes.title or "Meeting minutes"
+    return f"Minutes: {title}" + (f" — {minutes.held_on}" if minutes.held_on else "")
+
+
+def to_email_html(
+    minutes: Minutes,
+    transcript: Transcript | None = None,
+    duration: float | None = None,
+    note: str = "",
+) -> str:
+    """A mail-client-safe rendering: inline styles, no stylesheet, no dark mode."""
+    cite = _citer(transcript, wrap='<span style="color:#8a8f9c;font-size:12px">{}</span>')
+    esc = html.escape
+    out: list[str] = [f'<div style="{_EMAIL_BODY}">']
+    out.append(f'<h2 style="margin:0 0 4px">{esc(minutes.title or "Meeting minutes")}</h2>')
+
+    meta = [esc(minutes.held_on)] if minutes.held_on else []
+    if duration is not None:
+        meta.append(esc(format_duration(duration)))
+    if minutes.attendees:
+        meta.append(esc(", ".join(minutes.attendees)))
+    if meta:
+        out.append(f'<p style="{_EMAIL_MUTED};margin:0 0 16px">{" · ".join(meta)}</p>')
+
+    if note:
+        out.append(
+            '<p style="background:#f4f6fb;border-left:3px solid #2f6df6;padding:8px 12px;margin:0 0 16px">'
+            f"{esc(note)}</p>"
+        )
+
+    if minutes.summary:
+        out.append(f"<p>{esc(minutes.summary)}</p>")
+
+    if minutes.decisions:
+        out.append('<h3 style="margin:20px 0 6px">Decisions</h3><ol style="margin:0;padding-left:20px">')
+        out.extend(f"<li>{esc(d.text)} {cite(d.segment_index)}</li>" for d in minutes.decisions)
+        out.append("</ol>")
+
+    out.append('<h3 style="margin:20px 0 6px">Action points</h3>')
+    if minutes.actions:
+        rows = [
+            f'<tr><td style="{_EMAIL_CELL}">{esc(item.text)} {cite(item.segment_index)}</td>'
+            f'<td style="{_EMAIL_CELL}"><strong>{esc(item.owner) if item.owner else "unassigned"}</strong></td>'
+            f'<td style="{_EMAIL_CELL}">{esc(item.due) or "—"}</td></tr>'
+            for item in minutes.actions
+        ]
+        out.append(
+            '<table style="border-collapse:collapse;width:100%">'
+            f'<tr><th style="{_EMAIL_CELL};{_EMAIL_MUTED}">Action</th>'
+            f'<th style="{_EMAIL_CELL};{_EMAIL_MUTED}">Owner</th>'
+            f'<th style="{_EMAIL_CELL};{_EMAIL_MUTED}">Due</th></tr>'
+            f'{"".join(rows)}</table>'
+        )
+    else:
+        out.append("<p><em>None recorded.</em></p>")
+
+    if minutes.open_questions:
+        out.append('<h3 style="margin:20px 0 6px">Open questions</h3><ul style="margin:0;padding-left:20px">')
+        out.extend(f"<li>{esc(q)}</li>" for q in minutes.open_questions)
+        out.append("</ul>")
+
+    if minutes.review:
+        items = "".join(
+            f"<li>{esc(item.text)}" + (f" — {esc(item.owner)}" if item.owner else "") + "</li>"
+            for item in minutes.review
+        )
+        out.append(
+            '<h3 style="margin:20px 0 6px">Possible actions (needs review)</h3>'
+            '<div style="background:#fff8e6;border:1px solid #f0dfb0;border-radius:6px;padding:8px 12px">'
+            f'<p style="{_EMAIL_MUTED};margin:0 0 6px">Detected but not confidently a commitment.</p>'
+            f'<ul style="margin:0;padding-left:20px">{items}</ul></div>'
+        )
+
+    out.append(f'<p style="{_EMAIL_MUTED};margin-top:24px">{esc(_footer(minutes))}</p>')
+    out.append("</div>")
+    return "\n".join(out)
 
 
 # --------------------------------------------------------------------------

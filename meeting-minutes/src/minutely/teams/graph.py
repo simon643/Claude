@@ -9,6 +9,7 @@ translated rather than swallowed.
 
 from __future__ import annotations
 
+import json
 import time
 import urllib.parse
 from collections.abc import Callable, Iterator
@@ -99,6 +100,30 @@ class GraphClient:
 
     def get_json(self, path: str, params: dict[str, str] | None = None) -> dict[str, Any]:
         return self.get(path, params).json()
+
+    def post_json(self, path: str, payload: dict[str, Any]) -> Response:
+        """POST a JSON body. Used only for sending mail as the signed-in user."""
+        url = path if path.startswith("http") else f"{self.base}/{path.lstrip('/')}"
+        body = json.dumps(payload).encode("utf-8")
+        refreshed = False
+        for attempt in range(MAX_RETRIES + 1):
+            headers = {
+                "Authorization": f"Bearer {self.auth.access_token()}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            response = self._transport("POST", url, headers, body)
+            if response.ok:
+                return response
+            if response.status == 401 and not refreshed:
+                refreshed = True
+                self.auth.refresh()
+                continue
+            if response.status in {429, 503, 504} and attempt < MAX_RETRIES:
+                self._sleep(_retry_after(response, attempt))
+                continue
+            raise _error_for(response, url)
+        raise TeamsError(f"gave up on {url} after {MAX_RETRIES} retries")
 
     def get_bytes(
         self, path: str, params: dict[str, str] | None = None, *, accept: str = "*/*"

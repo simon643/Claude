@@ -18,6 +18,8 @@ from minutely import pipeline
 from minutely.config import Settings
 from minutely.server import build_server
 from minutely.store import Store
+from tests.conftest import DEMO
+from tests.fakes import json_response
 
 
 class Client:
@@ -263,7 +265,15 @@ def teams_client(store: Store) -> Iterator[tuple[Client, Any]]:
         .add(
             r"/oauth2/v2.0/token",
             json_response(
-                {"access_token": "token", "refresh_token": "r", "expires_in": 3600, "scope": "x"}
+                {
+                    "access_token": "token",
+                    "refresh_token": "r",
+                    "expires_in": 3600,
+                    "scope": (
+                        "Calendars.Read OnlineMeetingTranscript.Read.All "
+                        "https://graph.microsoft.com/Mail.Send"
+                    ),
+                }
             ),
         )
         .json_route(r"/me/calendarView", calendar_payload())
@@ -367,3 +377,224 @@ def test_a_teams_failure_surfaces_as_a_job_error(teams_client: tuple[Client, Any
     job = _await_job(client, "pull")
     assert job["state"] == "error"
     assert "administrator" in job["message"]
+
+
+# -- playback ---------------------------------------------------------------
+
+
+def _recorded(client: Client, body: bytes = b"0123456789abcdef") -> str:
+    _, started = client.post("/api/record/start", {"title": "Playback", "mime": "audio/webm"})
+    meeting_id = started["meeting"]["meeting_id"]
+    client.post(f"/api/record/chunk?meeting={meeting_id}", raw=body)
+    client.post("/api/record/stop", {"meeting_id": meeting_id, "duration": 5, "process": False})
+    return meeting_id
+
+
+def _raw_get(client: Client, path: str, headers: dict[str, str] | None = None, method: str = "GET") -> Any:
+    request = urllib.request.Request(client.base + path, method=method)
+    request.add_header("X-Session-Token", client.token)
+    for key, value in (headers or {}).items():
+        request.add_header(key, value)
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status, response.read(), dict(response.headers)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(), dict(exc.headers or {})
+
+
+def test_a_saved_recording_can_be_played_back(client: Client) -> None:
+    meeting_id = _recorded(client)
+    status, body, headers = _raw_get(client, f"/api/audio?id={meeting_id}")
+    assert status == 200
+    assert body == b"0123456789abcdef"
+    assert headers["Content-Type"] == "audio/webm"
+    assert headers["Accept-Ranges"] == "bytes"
+
+
+def test_playback_supports_seeking_with_range_requests(client: Client) -> None:
+    meeting_id = _recorded(client)
+    status, body, headers = _raw_get(
+        client, f"/api/audio?id={meeting_id}", {"Range": "bytes=4-8"}
+    )
+    assert status == 206
+    assert body == b"45678"
+    assert headers["Content-Range"] == "bytes 4-8/16"
+    assert headers["Content-Length"] == "5"
+
+
+def test_an_open_ended_range_runs_to_the_end(client: Client) -> None:
+    meeting_id = _recorded(client)
+    status, body, _ = _raw_get(client, f"/api/audio?id={meeting_id}", {"Range": "bytes=10-"})
+    assert status == 206
+    assert body == b"abcdef"
+
+
+def test_a_suffix_range_returns_the_tail(client: Client) -> None:
+    meeting_id = _recorded(client)
+    status, body, _ = _raw_get(client, f"/api/audio?id={meeting_id}", {"Range": "bytes=-4"})
+    assert status == 206
+    assert body == b"cdef"
+
+
+def test_an_unsatisfiable_range_is_refused(client: Client) -> None:
+    meeting_id = _recorded(client)
+    status, _body, headers = _raw_get(
+        client, f"/api/audio?id={meeting_id}", {"Range": "bytes=999-1200"}
+    )
+    assert status == 416
+    assert headers["Content-Range"] == "bytes */16"
+
+
+def test_players_can_probe_with_head(client: Client) -> None:
+    meeting_id = _recorded(client)
+    status, body, headers = _raw_get(client, f"/api/audio?id={meeting_id}", method="HEAD")
+    assert status == 200
+    assert body == b""
+    assert headers["Content-Length"] == "16"
+
+
+def test_audio_needs_the_session_token(client: Client) -> None:
+    meeting_id = _recorded(client)
+    request = urllib.request.Request(client.base + f"/api/audio?id={meeting_id}")
+    try:
+        urllib.request.urlopen(request, timeout=10)
+        raise AssertionError("expected a 401")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 401
+
+
+def test_a_meeting_with_no_recording_says_so(client: Client, demo_path: Path) -> None:
+    meeting, _ = pipeline.import_file(client.store, demo_path)
+    status, payload = client.get(f"/api/audio?id={meeting.meeting_id}")
+    assert status == 404
+    assert "no recording" in payload["error"]
+
+
+def test_a_recording_deleted_from_disk_is_reported(client: Client) -> None:
+    meeting_id = _recorded(client)
+    meeting = client.store.get_meeting(meeting_id)
+    assert meeting is not None
+    Path(meeting.audio_path).unlink()
+    status, payload = client.get(f"/api/audio?id={meeting_id}")
+    assert status == 404
+    assert "missing from disk" in payload["error"]
+
+
+def test_the_policy_allows_playing_our_own_audio(client: Client) -> None:
+    request = urllib.request.Request(client.base + "/")
+    with urllib.request.urlopen(request, timeout=10) as response:
+        policy = response.headers["Content-Security-Policy"]
+    assert "media-src 'self' blob:" in policy
+
+
+# -- recording from the calendar -------------------------------------------
+
+
+def test_starting_from_a_calendar_entry_carries_the_invite(client: Client) -> None:
+    _, started = client.post(
+        "/api/record/start",
+        {
+            "title": "Weekly product sync",
+            "mime": "audio/webm",
+            "event_id": "AAMkAGI2event1",
+            "attendees": ["Priya Raman", "Marcus Bell"],
+            "emails": ["priya@example.com", "marcus@example.com"],
+        },
+    )
+    meeting = client.store.get_meeting(started["meeting"]["meeting_id"])
+    assert meeting is not None
+    assert meeting.source == "teams"
+    assert meeting.external_id == "AAMkAGI2event1"
+    assert meeting.participants == ["Priya Raman", "Marcus Bell"]
+    # The addresses are what makes "share these minutes" a one-click job.
+    assert meeting.emails == ["priya@example.com", "marcus@example.com"]
+
+
+def test_a_locally_recorded_calendar_meeting_is_found_by_its_event_id(client: Client) -> None:
+    client.post(
+        "/api/record/start",
+        {"title": "Sync", "mime": "audio/webm", "event_id": "AAMkAGI2event1"},
+    )
+    # This is what stops `teams pull` importing a second copy of a meeting you
+    # already recorded yourself.
+    assert client.store.find_external("teams", "AAMkAGI2event1") is not None
+
+
+# -- calendar and sharing over HTTP ----------------------------------------
+
+
+def test_upcoming_is_empty_until_microsoft_is_connected(client: Client) -> None:
+    status, payload = client.get("/api/calendar/upcoming")
+    assert status == 200
+    assert payload == {"signed_in": False, "events": []}
+
+
+def test_upcoming_lists_the_calendar_and_flags_what_is_already_recorded(
+    teams_client: tuple[Client, Any],
+) -> None:
+    client, _fake = teams_client
+    client.post("/api/teams/login", {})
+    _await_job(client, "login")
+
+    status, payload = client.get("/api/calendar/upcoming?hours=99999")
+    assert status == 200
+    assert payload["signed_in"] is True
+    event = payload["events"][0]
+    assert event["title"] == "Weekly product sync"
+    assert event["emails"] == ["priya@example.com", "marcus@example.com"]
+    assert event["recorded_as"] == ""
+
+    # Record it, and the same entry now points at the local meeting.
+    _, started = client.post(
+        "/api/record/start",
+        {"title": event["title"], "mime": "audio/webm", "event_id": event["event_id"]},
+    )
+    _, payload = client.get("/api/calendar/upcoming?hours=99999")
+    assert payload["events"][0]["recorded_as"] == started["meeting"]["meeting_id"]
+
+
+def test_sharing_minutes_sends_them_through_microsoft(teams_client: tuple[Client, Any]) -> None:
+    client, fake = teams_client
+    fake.add(r"/me/sendMail", json_response({}, 202))
+    client.post("/api/teams/login", {})
+    _await_job(client, "login")
+
+    meeting, _ = pipeline.import_file(client.store, DEMO, title="Demo")
+    meeting.emails = ["dana@example.com"]
+    client.store.upsert_meeting(meeting)
+    pipeline.make_minutes(client.store, meeting, engine="rules")
+
+    status, payload = client.post(
+        "/api/share", {"meeting_id": meeting.meeting_id, "note": "As discussed."}
+    )
+    assert status == 200
+    assert payload["via"] == "graph"
+    assert payload["recipients"] == ["dana@example.com"]
+    assert fake.urls("sendMail")
+
+
+def test_sharing_a_meeting_with_no_minutes_is_refused(teams_client: tuple[Client, Any]) -> None:
+    client, _fake = teams_client
+    meeting, _ = pipeline.import_file(client.store, DEMO)
+    status, payload = client.post("/api/share", {"meeting_id": meeting.meeting_id})
+    assert status == 400
+    assert "no minutes" in payload["error"]
+
+
+def test_sharing_with_no_recipients_says_so(teams_client: tuple[Client, Any]) -> None:
+    client, _fake = teams_client
+    meeting, _ = pipeline.import_file(client.store, DEMO)
+    pipeline.make_minutes(client.store, meeting, engine="rules")
+    status, payload = client.post("/api/share", {"meeting_id": meeting.meeting_id, "to": []})
+    assert status == 400
+    assert "no recipients" in payload["error"]
+
+
+def test_sharing_without_any_mail_transport_explains_the_options(client: Client) -> None:
+    meeting, _ = pipeline.import_file(client.store, DEMO)
+    pipeline.make_minutes(client.store, meeting, engine="rules")
+    status, payload = client.post(
+        "/api/share", {"meeting_id": meeting.meeting_id, "to": ["someone@example.com"]}
+    )
+    assert status == 400
+    assert "teams login --with-email" in payload["error"]

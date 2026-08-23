@@ -23,7 +23,7 @@ from typing import Any
 from .config import db_path, ensure_dirs
 from .models import ActionItem, Meeting, Minutes, Transcript
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS meetings (
     audio_path      TEXT NOT NULL DEFAULT '',
     transcript_path TEXT NOT NULL DEFAULT '',
     participants    TEXT NOT NULL DEFAULT '[]',
+    emails          TEXT NOT NULL DEFAULT '[]',
     status          TEXT NOT NULL DEFAULT 'new',
     source          TEXT NOT NULL DEFAULT 'local',
     external_id     TEXT NOT NULL DEFAULT '',
@@ -105,6 +106,10 @@ def _migrate(cur: sqlite3.Cursor, from_version: int) -> None:
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_meetings_external ON meetings(source, external_id)"
         )
+    if from_version < 3:
+        columns = {row["name"] for row in cur.execute("PRAGMA table_info(meetings)")}
+        if "emails" not in columns:
+            cur.execute("ALTER TABLE meetings ADD COLUMN emails TEXT NOT NULL DEFAULT '[]'")
 
 
 class Store:
@@ -165,9 +170,9 @@ class Store:
             cur.execute(
                 """
                 INSERT INTO meetings (meeting_id, title, held_on, duration, audio_path,
-                                      transcript_path, participants, status, source,
-                                      external_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      transcript_path, participants, emails, status,
+                                      source, external_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(meeting_id) DO UPDATE SET
                     title = excluded.title,
                     held_on = excluded.held_on,
@@ -178,6 +183,8 @@ class Store:
                                            THEN meetings.transcript_path
                                            ELSE excluded.transcript_path END,
                     participants = excluded.participants,
+                    emails = CASE WHEN excluded.emails = '[]' THEN meetings.emails
+                                  ELSE excluded.emails END,
                     status = excluded.status,
                     source = excluded.source,
                     -- A later write that knows nothing about the origin must
@@ -195,6 +202,7 @@ class Store:
                     meeting.audio_path,
                     meeting.transcript_path,
                     json.dumps(meeting.participants),
+                    json.dumps(meeting.emails),
                     meeting.status,
                     meeting.source,
                     meeting.external_id,
@@ -430,6 +438,7 @@ def _meeting(row: sqlite3.Row) -> Meeting:
         audio_path=row["audio_path"],
         transcript_path=row["transcript_path"],
         participants=json.loads(row["participants"] or "[]"),
+        emails=json.loads(row["emails"] or "[]"),
         status=row["status"],
         source=row["source"],
         external_id=row["external_id"],

@@ -70,6 +70,20 @@ td.done { text-decoration: line-through; color: var(--muted); }
 .err { color: var(--rec); font-size: .87rem; margin-top: .6rem; white-space: pre-wrap; }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
+ul.agenda { list-style: none; margin: 0; padding: 0; }
+ul.agenda li { display: flex; gap: .6rem; align-items: baseline; padding: .45rem .1rem;
+               border-bottom: 1px solid var(--line); }
+ul.agenda li:last-child { border-bottom: 0; }
+ul.agenda .when { font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--muted); min-width: 3.2rem; }
+ul.agenda .what { flex: 1; font-size: .92rem; }
+ul.agenda .sub { font-size: .78rem; color: var(--muted); }
+ul.agenda button { flex-shrink: 0; }
+audio { width: 100%; margin: .4rem 0 .2rem; }
+button.seek { background: none; border: 0; padding: 0 .15rem; color: var(--accent);
+              font: inherit; font-size: .8rem; font-variant-numeric: tabular-nums; cursor: pointer; }
+button.seek:hover { text-decoration: underline; }
+.share { border-top: 1px solid var(--line); margin-top: 1.4rem; padding-top: .9rem; }
+.share input[type=text] { margin-bottom: .4rem; }
 pre.md { white-space: pre-wrap; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
          background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: .8rem; max-height: 26rem; overflow: auto; }
 .spin { display: inline-block; width: .8rem; height: .8rem; border: 2px solid var(--line);
@@ -89,6 +103,11 @@ pre.md { white-space: pre-wrap; font: 13px/1.5 ui-monospace, SFMono-Regular, Men
 
 <main>
   <div>
+    <section class="panel hidden" id="upnext-panel">
+      <h2>Up next</h2>
+      <div id="upnext"></div>
+    </section>
+
     <section class="panel" id="recorder">
       <h2>New recording</h2>
       <div id="idle-form">
@@ -173,7 +192,8 @@ async function api(path, options) {
 }
 
 const state = { meetingId: null, recorder: null, stream: null, tracks: [], audioCtx: null,
-                startedAt: 0, ticker: null, poller: null, teamsPoll: null, tab: "record" };
+                startedAt: 0, ticker: null, poller: null, teamsPoll: null, tab: "record",
+                pendingEvent: null, player: null, segments: {} };
 
 // ---------------------------------------------------------------- recording
 
@@ -228,9 +248,18 @@ async function startRecording() {
     return;
   }
 
+  const planned = state.pendingEvent || {};
   let started;
   try {
-    started = await api("/api/record/start", { json: { title: $("title").value, mime: recorder.mimeType || mime } });
+    started = await api("/api/record/start", {
+      json: {
+        title: $("title").value,
+        mime: recorder.mimeType || mime,
+        event_id: planned.event_id || "",
+        attendees: planned.attendees || [],
+        emails: planned.emails || [],
+      },
+    });
   } catch (err) {
     stopTracks();
     $("rec-error").textContent = "Could not start: " + err.message;
@@ -335,7 +364,9 @@ async function stopRecording() {
     $("rec-error").textContent = err.message;
   }
   $("title").value = "";
+  state.pendingEvent = null;
   await refreshMeetings();
+  await refreshUpNext();
   await openMeeting(state.meetingId);
 }
 
@@ -405,6 +436,23 @@ function renderMeeting(data) {
     (meeting.duration ? " · " + Math.round(meeting.duration / 60) + " min" : "") + "</p>";
   body.append(head);
 
+  // A saved recording is playable from here, and every citation in the
+  // minutes below seeks this player.
+  state.player = null;
+  state.segments = {};
+  if (data.transcript) {
+    for (const segment of data.transcript.segments) state.segments[segment.index] = segment.start;
+  }
+  if (meeting.audio_path) {
+    const player = document.createElement("audio");
+    player.controls = true;
+    player.preload = "none";
+    player.src = "/api/audio?id=" + encodeURIComponent(meeting.meeting_id) +
+                 "&token=" + encodeURIComponent(TOKEN);
+    body.append(player);
+    state.player = player;
+  }
+
   const job = document.createElement("p");
   job.id = "job-line";
   job.className = "muted";
@@ -468,6 +516,7 @@ function renderMeeting(data) {
     for (const topic of minutes.topics) {
       const h = document.createElement("h3");
       h.textContent = topic.title;
+      h.append(cite(topic.segment_index));
       const ul = document.createElement("ul");
       for (const point of topic.points) {
         const li = document.createElement("li");
@@ -484,12 +533,14 @@ function renderMeeting(data) {
     for (const decision of minutes.decisions) {
       const li = document.createElement("li");
       li.textContent = decision.text;
+      li.append(cite(decision.segment_index));
       ol.append(li);
     }
     body.append(section("Decisions", ol));
   }
 
   body.append(section("Action points", actionTable(minutes.actions, () => openMeeting(meeting.meeting_id))));
+  body.append(shareBox(meeting, data));
 
   if (minutes.open_questions.length) {
     const ul = document.createElement("ul");
@@ -542,6 +593,7 @@ function actionTable(actions, onChange) {
     tick.append(box);
     const text = document.createElement("td");
     text.textContent = item.text;
+    text.append(cite(item.segment_index));
     if (item.status === "done") text.className = "done";
     const owner = document.createElement("td");
     owner.textContent = item.owner || "—";
@@ -553,6 +605,104 @@ function actionTable(actions, onChange) {
   }
   table.append(tbody);
   return table;
+}
+
+function cite(segmentIndex) {
+  const start = state.segments[segmentIndex];
+  if (segmentIndex === null || segmentIndex === undefined || start === null || start === undefined) {
+    return document.createTextNode("");
+  }
+  const label = clock(start);
+  if (!state.player) {
+    const plain = document.createElement("span");
+    plain.className = "cite";
+    plain.textContent = " [" + label + "]";
+    return plain;
+  }
+  const button = document.createElement("button");
+  button.className = "seek";
+  button.type = "button";
+  button.textContent = "[" + label + "]";
+  button.title = "Play from " + label;
+  button.onclick = () => {
+    // A couple of seconds of run-up: the sentence usually starts before the
+    // cue does, and landing mid-word is disorienting.
+    state.player.currentTime = Math.max(0, start - 2);
+    state.player.play();
+  };
+  return button;
+}
+
+function clock(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  const mm = String(Math.floor(total / 60) % 60).padStart(2, "0");
+  const ss = String(total % 60).padStart(2, "0");
+  const hh = Math.floor(total / 3600);
+  return hh > 0 ? hh + ":" + mm + ":" + ss : mm + ":" + ss;
+}
+
+function shareBox(meeting, data) {
+  const wrap = document.createElement("div");
+  wrap.className = "share";
+  const heading = document.createElement("h2");
+  heading.textContent = "Send by email";
+  wrap.append(heading);
+
+  const to = document.createElement("input");
+  to.type = "text";
+  to.placeholder = "someone@example.com, someone-else@example.com";
+  to.value = (meeting.emails || []).join(", ");
+  const note = document.createElement("input");
+  note.type = "text";
+  note.placeholder = "Optional note to go above the minutes";
+
+  const row = document.createElement("div");
+  row.className = "row";
+  const send = document.createElement("button");
+  send.className = "ghost";
+  send.textContent = "Send minutes";
+  const withTranscript = document.createElement("label");
+  withTranscript.style.fontSize = ".84rem";
+  withTranscript.style.margin = "0";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  withTranscript.append(box, document.createTextNode(" attach transcript"));
+
+  const status = document.createElement("p");
+  status.className = "muted";
+  status.style.fontSize = ".85rem";
+  status.style.margin = ".4rem 0 0";
+
+  send.onclick = async () => {
+    send.disabled = true;
+    status.className = "muted";
+    status.textContent = "sending...";
+    try {
+      const result = await api("/api/share", {
+        json: {
+          meeting_id: meeting.meeting_id,
+          to: to.value.split(/[,;]/).map((v) => v.trim()).filter(Boolean),
+          note: note.value,
+          with_transcript: box.checked,
+        },
+      });
+      status.textContent = "Sent to " + result.recipients.join(", ") + " via " + result.via + ".";
+    } catch (err) {
+      status.className = "err";
+      status.textContent = err.message;
+    }
+    send.disabled = false;
+  };
+
+  row.append(send, withTranscript);
+  wrap.append(to, note, row, status);
+
+  const hint = document.createElement("p");
+  hint.className = "muted";
+  hint.style.fontSize = ".8rem";
+  hint.textContent = "The minutes go as an email with the markdown attached. The recording stays on this machine.";
+  wrap.append(hint);
+  return wrap;
 }
 
 function section(title, node) {
@@ -575,6 +725,82 @@ function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text == null ? "" : String(text);
   return div.innerHTML;
+}
+
+// ----------------------------------------------------------------- up next
+
+async function refreshUpNext() {
+  let info;
+  try {
+    info = await api("/api/calendar/upcoming");
+  } catch (err) {
+    $("upnext-panel").classList.add("hidden");
+    return;
+  }
+  const host = $("upnext");
+  const panel = $("upnext-panel");
+  if (!info.signed_in || !info.events.length) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  host.innerHTML = "";
+
+  const list = document.createElement("ul");
+  list.className = "agenda";
+  for (const event of info.events) {
+    const li = document.createElement("li");
+
+    const when = document.createElement("span");
+    when.className = "when";
+    when.textContent = new Date(event.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    const what = document.createElement("div");
+    what.className = "what";
+    what.textContent = event.title;
+    const sub = document.createElement("div");
+    sub.className = "sub";
+    const bits = [];
+    if (event.starts_in > 0) bits.push("in " + event.starts_in + " min");
+    else bits.push("started");
+    if (event.is_teams) bits.push("Teams");
+    else if (event.online) bits.push("online");
+    else if (event.location) bits.push(event.location);
+    if (event.attendees.length) bits.push(event.attendees.length + " invited");
+    sub.textContent = bits.join(" · ");
+    what.append(sub);
+
+    const action = document.createElement("button");
+    action.className = "ghost";
+    if (event.recorded_as) {
+      action.textContent = "Open";
+      action.onclick = () => openMeeting(event.recorded_as);
+    } else {
+      action.textContent = "Record";
+      action.onclick = () => recordEvent(event);
+    }
+
+    li.append(when, what, action);
+    list.append(li);
+  }
+  host.append(list);
+}
+
+async function recordEvent(event) {
+  if (state.recorder) {
+    $("rec-error").textContent = "Already recording — stop that first.";
+    return;
+  }
+  state.pendingEvent = {
+    event_id: event.event_id,
+    attendees: event.attendees || [],
+    emails: event.emails || [],
+  };
+  $("title").value = event.title;
+  // An online meeting is the case where the other half of the conversation is
+  // in a browser tab rather than in the room.
+  $("withTab").checked = !!event.online;
+  await startRecording();
 }
 
 // ------------------------------------------------------------------ teams
@@ -745,6 +971,8 @@ function showTab(name) {
   $("tab-actions").classList.toggle("on", name === "actions");
   $("recorder").classList.toggle("hidden", name !== "record");
   $("teams-panel").classList.toggle("hidden", name !== "record");
+  if (name !== "record") $("upnext-panel").classList.add("hidden");
+  else refreshUpNext();
   $("detail").classList.toggle("hidden", name !== "record");
   $("actions-panel").classList.toggle("hidden", name !== "actions");
   if (name === "actions") refreshActions();
@@ -780,6 +1008,9 @@ window.addEventListener("beforeunload", (event) => {
   }
   await refreshMeetings();
   await refreshTeams();
+  await refreshUpNext();
+  // The calendar moves on its own; keep the list honest without a reload.
+  setInterval(refreshUpNext, 120000);
 })();
 </script>
 </body>

@@ -11,9 +11,9 @@ from minutely.config import Settings
 from minutely.store import Store
 from minutely.teams import TeamsError
 from minutely.teams.auth import TeamsAuth
+from minutely.teams.calendar import CalendarEvent
 from minutely.teams.graph import GraphClient
 from minutely.teams.sync import (
-    TeamsMeeting,
     list_meetings,
     online_meeting_id,
     pull_meeting,
@@ -150,8 +150,8 @@ def test_a_blocked_tenant_is_not_papered_over(tmp_path: Path) -> None:
 # -- pulling ----------------------------------------------------------------
 
 
-def teams_meeting() -> TeamsMeeting:
-    return TeamsMeeting(
+def teams_meeting() -> CalendarEvent:
+    return CalendarEvent(
         event_id="AAMkAGI2event1",
         subject="Weekly product sync",
         start=datetime(2026, 8, 24, 9, 0, tzinfo=UTC),

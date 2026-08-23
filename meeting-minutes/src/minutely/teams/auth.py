@@ -25,6 +25,7 @@ from typing import Any
 
 from ..config import (
     MS_AUTHORITY,
+    TEAMS_MAIL_SCOPE,
     TEAMS_RECORDING_SCOPE,
     TEAMS_SCOPES,
     ensure_dirs,
@@ -68,10 +69,19 @@ class TokenSet:
     def is_expired(self) -> bool:
         return time.time() >= (self.expires_at - EXPIRY_SKEW)
 
+    def _granted(self, scope: str) -> bool:
+        # Graph echoes scopes back fully qualified
+        # ("https://graph.microsoft.com/Mail.Send"), so compare on the suffix.
+        needle = scope.lower()
+        return any(granted.lower().endswith(needle) for granted in self.scopes)
+
     @property
     def can_read_recordings(self) -> bool:
-        granted = {scope.lower() for scope in self.scopes}
-        return any(scope.endswith(TEAMS_RECORDING_SCOPE.lower()) for scope in granted)
+        return self._granted(TEAMS_RECORDING_SCOPE)
+
+    @property
+    def can_send_mail(self) -> bool:
+        return self._granted(TEAMS_MAIL_SCOPE)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -124,6 +134,7 @@ class TeamsAuth:
         tenant: str = "organizations",
         *,
         with_recordings: bool = False,
+        with_email: bool = False,
         transport: Transport = urllib_transport,
         token_path: Path | None = None,
         sleep: Callable[[float], None] = time.sleep,
@@ -131,7 +142,11 @@ class TeamsAuth:
     ) -> None:
         self.client_id = client_id.strip()
         self.tenant = (tenant or "organizations").strip()
-        self.scopes = list(TEAMS_SCOPES) + ([TEAMS_RECORDING_SCOPE] if with_recordings else [])
+        self.scopes = list(TEAMS_SCOPES)
+        if with_recordings:
+            self.scopes.append(TEAMS_RECORDING_SCOPE)
+        if with_email:
+            self.scopes.append(TEAMS_MAIL_SCOPE)
         self._transport = transport
         self._token_path = token_path
         self._sleep = sleep
@@ -150,6 +165,17 @@ class TeamsAuth:
     def signed_in(self) -> bool:
         tokens = self.tokens
         return bool(tokens and (tokens.access_token or tokens.refresh_token))
+
+    @property
+    def can_send_mail(self) -> bool:
+        """Whether the sign-in actually carries the Mail.Send permission."""
+        tokens = self.tokens
+        return bool(tokens and tokens.can_send_mail)
+
+    @property
+    def can_read_recordings(self) -> bool:
+        tokens = self.tokens
+        return bool(tokens and tokens.can_read_recordings)
 
     def logout(self) -> bool:
         """Forget the local sign-in. Nothing is revoked server-side."""

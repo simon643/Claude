@@ -12,7 +12,9 @@ pulls nothing.
 ```
 minutely demo                 # minute a bundled sample meeting, no setup at all
 minutely record               # open the recorder in your browser
+minutely upcoming             # what's next on your calendar
 minutely teams pull           # pull Teams meeting transcripts and minute them
+minutely share --to sam@x.com # email the minutes
 minutely import meeting.vtt   # already have a transcript? start from that
 minutely minutes              # write the minutes for the latest meeting
 minutely actions              # the action register, across every meeting
@@ -70,6 +72,31 @@ the engine spotted but is not confident anybody committed to. That last section
 exists because minutes that list work nobody agreed to are worse than minutes
 that miss a line; the uncertain items are visible, but they stay out of the
 action register until a human promotes them.
+
+## Your calendar, and one click to record
+
+Once Microsoft 365 is connected (below), `minutely record` opens with an **Up
+next** list: the meetings on your calendar for the next few hours, each with a
+**Record** button. Clicking one starts recording immediately with the meeting's
+title, its attendees, and — for an online meeting — tab audio already switched
+on. Nothing to type while people are waiting for you.
+
+```bash
+minutely upcoming            # the same list, in the terminal
+minutely upcoming --hours 3
+```
+
+```
+WHEN     IN        WHERE      MEETING
+09:30    12 min    Teams      Weekly product sync
+11:00    1 h 42    in person  Design review — Room 3
+14:00    4 h 42    Teams      Board prep [recorded]
+```
+
+A recording started this way remembers which calendar event it was, which does
+two useful things: `minutely teams pull` later recognises the same meeting
+instead of importing a second copy of it, and the attendees' addresses come
+along so sharing the minutes is one click rather than a round of retyping.
 
 ## Recording
 
@@ -183,7 +210,11 @@ issues no secret — this is a public client, so there is nothing to keep safe.
    | `OnlineMeetings.Read` | turn a join URL into the meeting behind it |
    | `OnlineMeetingTranscript.Read.All` | read the transcripts of those meetings |
    | `OnlineMeetingRecording.Read.All` | *optional* — only for `--with-recording` |
+   | `Mail.Send` | *optional* — only for `minutely share` from your mailbox |
    | `User.Read` | show which account is signed in |
+
+   Add `Mail.Send` too if you want minutely to email the minutes from your
+   own mailbox (`minutely teams login --with-email`).
 
 4. Click **Grant admin consent**. The transcript and recording scopes require
    it; if you are not an administrator, someone who is will have to approve
@@ -274,6 +305,46 @@ verbatim quote which is then resolved against the local transcript. A quote
 that matches nothing gets no citation, and the item is held back for review
 rather than published as fact.
 
+## Listening back
+
+Recordings are kept, and every meeting page has a player. The citations in the
+minutes are the interesting part: each `[01:14]` is a button, and clicking it
+plays the recording from two seconds before the line that produced the action.
+When someone disputes an action point, that is the whole argument settled.
+
+Audio is served from the local server with range requests, so scrubbing a
+two-hour meeting does not load two hours of audio.
+
+```bash
+minutely list                          # everything recorded, newest first
+minutely show 2026-08-24-0930-7f3a     # the minutes for one of them
+minutely delete <id> --yes --files     # and this removes it for good
+```
+
+## Sending the minutes
+
+```bash
+minutely share                                  # to the meeting's attendees
+minutely share --to sam@example.com --note "Sorry I missed this one."
+minutely share --with-transcript --dry-run      # see exactly what would go
+```
+
+The minutes go as a real email — HTML body, plain-text alternative, and the
+markdown attached — from one of two places:
+
+| | Microsoft 365 | SMTP |
+|---|---|---|
+| Setup | `minutely teams login --with-email` | `minutely config --smtp-host … --smtp-from …` |
+| Sends from | your real mailbox, saved to Sent Items | whatever the server allows |
+| Password | none — it uses the sign-in you already have | `MINUTELY_SMTP_PASSWORD`, read at send time, never stored |
+
+Recipients default to the attendees on the calendar invite. There is a **Send by
+email** box on every meeting page in the UI, pre-filled the same way.
+
+The recording itself is never attached. It is large, and the people in it agreed
+to be minuted, not forwarded — if someone needs the audio, they can be sent the
+file deliberately.
+
 ## The action register
 
 Actions outlive the meeting they came from:
@@ -338,6 +409,8 @@ The page loads nothing from the network and is served under a
 | `minutely show [meeting]` | print the minutes already generated |
 | `minutely export [meeting]` | write them to a file (`--format md/html/txt/json`) |
 | `minutely list` | every meeting |
+| `minutely upcoming` | what is next on your calendar (`--hours`) |
+| `minutely share` | email the minutes (`--to`, `--note`, `--with-transcript`, `--dry-run`) |
 | `minutely actions` | the action register (`--status`, `--owner`, `--meeting`) |
 | `minutely done/reopen/dropped <id>` | change an action's status |
 | `minutely teams login/status/logout` | Microsoft 365 sign-in for the Teams integration |
@@ -370,7 +443,8 @@ Microsoft Graph ──teams/sync.py──────────────> t
 | `transcripts.py` | VTT / SRT / whisper JSON / plain text in, `Transcript` out |
 | `engines/rules.py` | the offline extraction: actions, owners, deadlines, decisions, topics |
 | `engines/claude.py` | the Anthropic engine, plus the quote-grounding that keeps it honest |
-| `teams/` | Microsoft 365 sign-in (`auth.py`), a small Graph client (`graph.py`), and calendar-to-minutes (`sync.py`) |
+| `teams/` | Microsoft 365 sign-in (`auth.py`), a small Graph client (`graph.py`), the calendar (`calendar.py`), and Teams-to-minutes (`sync.py`) |
+| `share.py` | composing the email, and sending it via Microsoft 365 or SMTP |
 | `store.py` | meetings, transcripts, minutes history, and the action register |
 | `render.py` | Markdown, HTML, text, JSON |
 | `server.py` + `ui/app.html` | the loopback recorder and review UI |

@@ -285,3 +285,87 @@ def test_config_stores_the_teams_application_id(capsys: pytest.CaptureFixture[st
     assert json.loads(out)["teams_client_id"] == "abc-123"
     code, out, _ = run(["config"], capsys)
     assert "configured, not signed in" in out
+
+
+# -- calendar and sharing ---------------------------------------------------
+
+
+def test_upcoming_without_a_signin_says_what_to_do(capsys: pytest.CaptureFixture[str]) -> None:
+    code, _out, err = run(["upcoming"], capsys)
+    assert code == 1
+    assert "minutely teams login" in err
+
+
+def test_upcoming_lists_the_calendar(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.fakes import FakeMicrosoft, calendar_payload
+
+    fake = FakeMicrosoft().json_route(r"/me/calendarView", calendar_payload())
+    _fake_teams(monkeypatch, tmp_path, fake)
+
+    code, out, _ = run(["upcoming", "--hours", "99999", "--json"], capsys)
+    assert code == 0
+    rows = json.loads(out)
+    assert rows[0]["title"] == "Weekly product sync"
+    assert rows[0]["emails"] == ["priya@example.com", "marcus@example.com"]
+
+
+def test_share_dry_run_shows_what_would_go_without_sending(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run(["demo"], capsys)
+    code, out, _ = run(
+        ["share", "--to", "dana@example.com", "--note", "As discussed.", "--dry-run"], capsys
+    )
+    assert code == 0
+    assert "dana@example.com" in out
+    assert "Minutes: Weekly product sync (demo)" in out
+    assert "nothing was sent" in out
+
+
+def test_share_rejects_a_malformed_address(capsys: pytest.CaptureFixture[str]) -> None:
+    run(["demo"], capsys)
+    code, _out, err = run(["share", "--to", "not-an-address", "--dry-run"], capsys)
+    assert code == 1
+    assert "does not look like an email address" in err
+
+
+def test_share_without_a_transport_names_both_options(capsys: pytest.CaptureFixture[str]) -> None:
+    run(["demo"], capsys)
+    code, _out, err = run(["share", "--to", "dana@example.com"], capsys)
+    assert code == 1
+    assert "teams login --with-email" in err
+    assert "smtp-host" in err
+
+
+def test_share_needs_minutes_first(
+    capsys: pytest.CaptureFixture[str], demo_path: Path
+) -> None:
+    code, out, _ = run(["import", str(demo_path), "--json"], capsys)
+    meeting_id = json.loads(out)["meeting_id"]
+    code, _out, err = run(["share", meeting_id, "--to", "a@b.com"], capsys)
+    assert code == 1
+    assert "no minutes" in err
+
+
+def test_config_stores_smtp_settings(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _ = run(
+        [
+            "config",
+            "--smtp-host", "smtp.example.com",
+            "--smtp-from", "me@example.com",
+            "--smtp-port", "2525",
+            "--no-smtp-starttls",
+            "--json",
+        ],
+        capsys,
+    )
+    assert code == 0
+    saved = json.loads(out)
+    assert saved["smtp_host"] == "smtp.example.com"
+    assert saved["smtp_port"] == 2525
+    assert saved["smtp_starttls"] is False
+
+    code, out, _ = run(["config"], capsys)
+    assert "email       : smtp" in out

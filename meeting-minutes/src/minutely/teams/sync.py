@@ -16,11 +16,10 @@ transcript and minuted by whichever engine is configured.
 
 from __future__ import annotations
 
-import re
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,60 +30,36 @@ from ..engines import EngineError
 from ..models import Meeting, Minutes
 from ..store import Store
 from . import TeamsError
+from .calendar import CalendarEvent, list_events
 from .graph import GraphClient
 
 SOURCE = "teams"
-# Teams says which product produced the meeting; a Skype or third-party entry
-# has no transcript for us to read.
-TEAMS_PROVIDER = "teamsforbusiness"
-
-_EVENT_FIELDS = (
-    "id,subject,start,end,organizer,attendees,isOnlineMeeting,onlineMeetingProvider,"
-    "onlineMeeting,isCancelled,webLink"
-)
-# Graph returns up to seven fractional-second digits; datetime.fromisoformat
-# accepts three or six.
-_FRACTION = re.compile(r"\.(\d{1,7})")
 
 
-@dataclass
-class TeamsMeeting:
-    """One Teams meeting on the signed-in user's calendar."""
-
-    event_id: str
-    subject: str
-    start: datetime
-    end: datetime | None = None
-    organizer: str = ""
-    attendees: list[str] = field(default_factory=list)
-    join_url: str = ""
-    cancelled: bool = False
-
-    @property
-    def held_on(self) -> date:
-        return self.start.date()
-
-    @property
-    def title(self) -> str:
-        return self.subject or "Teams meeting"
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "event_id": self.event_id,
-            "subject": self.subject,
-            "start": self.start.isoformat(),
-            "end": self.end.isoformat() if self.end else None,
-            "organizer": self.organizer,
-            "attendees": self.attendees,
-            "join_url": self.join_url,
-        }
+def list_meetings(
+    graph: GraphClient,
+    *,
+    days_back: int = 7,
+    days_forward: int = 1,
+    limit: int = 50,
+    now: datetime | None = None,
+) -> list[CalendarEvent]:
+    """The Teams meetings on the calendar — the ones that might have transcripts."""
+    return list_events(
+        graph,
+        days_back=days_back,
+        days_forward=days_forward,
+        limit=limit,
+        teams_only=True,
+        now=now,
+    )
 
 
 @dataclass
 class PullResult:
     """What happened to one meeting."""
 
-    teams: TeamsMeeting
+    teams: CalendarEvent
     status: str  # imported | updated | skipped | no-transcript | error
     detail: str = ""
     meeting_id: str = ""
@@ -108,42 +83,6 @@ class PullResult:
 # --------------------------------------------------------------------------
 # Reading Teams
 # --------------------------------------------------------------------------
-
-
-def list_meetings(
-    graph: GraphClient,
-    *,
-    days_back: int = 7,
-    days_forward: int = 1,
-    limit: int = 50,
-    now: datetime | None = None,
-) -> list[TeamsMeeting]:
-    """Teams meetings on the user's calendar in a window around today."""
-    anchor = now or datetime.now(UTC)
-    start = anchor - timedelta(days=max(0, days_back))
-    end = anchor + timedelta(days=max(0, days_forward))
-
-    rows = graph.paged(
-        "/me/calendarView",
-        {
-            "startDateTime": _graph_time(start),
-            "endDateTime": _graph_time(end),
-            "$select": _EVENT_FIELDS,
-            "$orderby": "start/dateTime desc",
-            "$top": "50",
-        },
-        limit=limit * 4,  # room to discard the non-Teams entries
-    )
-
-    meetings: list[TeamsMeeting] = []
-    for row in rows:
-        meeting = _event_to_meeting(row)
-        if meeting is None:
-            continue
-        meetings.append(meeting)
-        if len(meetings) >= limit:
-            break
-    return meetings
 
 
 def online_meeting_id(graph: GraphClient, join_url: str) -> str:
@@ -202,7 +141,7 @@ def list_recordings(graph: GraphClient, meeting_id: str) -> list[dict[str, Any]]
 def pull_meeting(
     store: Store,
     graph: GraphClient,
-    teams_meeting: TeamsMeeting,
+    teams_meeting: CalendarEvent,
     settings: Settings | None = None,
     *,
     with_recording: bool = False,
@@ -258,6 +197,7 @@ def pull_meeting(
 
     if not local.participants:
         local.participants = teams_meeting.attendees
+    local.emails = local.emails or teams_meeting.emails
     if teams_meeting.end is not None and not local.duration:
         # The transcript's own span is the better measure and import_file has
         # already used it when the cues carry timings. The calendar block is
@@ -301,7 +241,7 @@ def pull_recent(
     engine: str | None = None,
     force: bool = False,
     match: str = "",
-    on_progress: Callable[[TeamsMeeting], None] | None = None,
+    on_progress: Callable[[CalendarEvent], None] | None = None,
 ) -> list[PullResult]:
     """Pull every Teams meeting in the window that has a transcript."""
     results: list[PullResult] = []
@@ -340,64 +280,3 @@ def _attach_recording(graph: GraphClient, meeting_id: str, local: Meeting) -> st
     local.audio_path = str(destination)
     local.duration = local.duration or audio_duration(destination)
     return f"recording saved ({written // (1024 * 1024)} MB)"
-
-
-def _event_to_meeting(row: dict[str, Any]) -> TeamsMeeting | None:
-    if not row.get("isOnlineMeeting"):
-        return None
-    provider = str(row.get("onlineMeetingProvider", "")).lower()
-    if provider and provider != TEAMS_PROVIDER:
-        return None
-    start = _parse_time(row.get("start"))
-    if start is None:
-        return None
-
-    online = row.get("onlineMeeting")
-    join_url = str(online.get("joinUrl", "")) if isinstance(online, dict) else ""
-    organizer = row.get("organizer")
-    return TeamsMeeting(
-        event_id=str(row.get("id", "")),
-        subject=str(row.get("subject", "")).strip(),
-        start=start,
-        end=_parse_time(row.get("end")),
-        organizer=_person(organizer),
-        attendees=[
-            name
-            for name in (_person(a) for a in row.get("attendees", []) if isinstance(a, dict))
-            if name
-        ],
-        join_url=join_url,
-        cancelled=bool(row.get("isCancelled")),
-    )
-
-
-def _person(raw: Any) -> str:
-    if not isinstance(raw, dict):
-        return ""
-    address = raw.get("emailAddress")
-    if isinstance(address, dict):
-        return str(address.get("name") or address.get("address") or "").strip()
-    return ""
-
-
-def _parse_time(raw: Any) -> datetime | None:
-    if not isinstance(raw, dict):
-        return None
-    value = str(raw.get("dateTime", ""))
-    if not value:
-        return None
-    # Trim Graph's seven-digit fraction to something fromisoformat accepts.
-    value = _FRACTION.sub(lambda m: "." + m.group(1)[:6], value)
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        # calendarView is requested in UTC; Graph labels it in the sibling
-        # "timeZone" field rather than in the string.
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
-
-
-def _graph_time(value: datetime) -> str:
-    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

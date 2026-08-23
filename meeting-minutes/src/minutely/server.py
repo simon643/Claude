@@ -32,6 +32,7 @@ import threading
 import urllib.parse
 import webbrowser
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -44,9 +45,12 @@ from .config import Settings, ensure_dirs, recordings_dir
 from .engines import EngineError
 from .engines.factory import ENGINES
 from .models import Meeting
+from .share import ShareError, compose, send
+from .share import available as share_transports
 from .store import Store
 from .teams import TeamsError
 from .teams.auth import TeamsAuth
+from .teams.calendar import upcoming
 from .teams.factory import build_auth, build_client
 from .teams.graph import GraphClient
 from .teams.sync import pull_recent
@@ -58,6 +62,19 @@ _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 # One MediaRecorder chunk. The page sends every few seconds, so this is roomy.
 MAX_CHUNK_BYTES = 32 * 1024 * 1024
 MAX_JSON_BYTES = 2 * 1024 * 1024
+# Playback is served in slices so a long meeting does not have to be read into
+# memory to be scrubbed through.
+STREAM_CHUNK = 256 * 1024
+_AUDIO_TYPES = {
+    ".webm": "audio/webm",
+    ".ogg": "audio/ogg",
+    ".oga": "audio/ogg",
+    ".m4a": "audio/mp4",
+    ".mp4": "video/mp4",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".flac": "audio/flac",
+}
 
 
 class AppState:
@@ -113,7 +130,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
-            "img-src data:; media-src blob:; connect-src 'self'; base-uri 'none'; form-action 'none'",
+            "img-src data:; media-src 'self' blob:; connect-src 'self'; "
+            "base-uri 'none'; form-action 'none'",
         )
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
@@ -168,7 +186,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         try:
             self._route_get(path, query)
-        except (EngineError, TranscriptionError, pipeline.PipelineError, TeamsError) as exc:
+        except (EngineError, TranscriptionError, pipeline.PipelineError, TeamsError, ShareError) as exc:
             self._error(400, str(exc))
         except Exception as exc:
             self._error(500, f"{type(exc).__name__}: {exc}")
@@ -215,6 +233,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status = (query.get("status") or ["open"])[0]
             owner = (query.get("owner") or [""])[0]
             self._json({"actions": store.action_rows(status=status, owner=owner or None)})
+
+        elif path == "/api/calendar/upcoming":
+            self._json(self._upcoming(query))
+
+        elif path == "/api/audio":
+            meeting = self._meeting(query)
+            if meeting is None:
+                self._error(404, "unknown meeting")
+                return
+            self._serve_audio(meeting)
 
         elif path == "/api/teams/state":
             self._json(self._teams_state())
@@ -281,6 +309,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._json(self._handle_action(payload))
             elif path == "/api/meeting/update":
                 self._json(self._handle_update(payload))
+            elif path == "/api/share":
+                self._json(self._handle_share(payload))
             elif path == "/api/teams/login":
                 self._json(self._handle_teams_login())
             elif path == "/api/teams/pull":
@@ -289,7 +319,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._error(404, "unknown endpoint")
         except json.JSONDecodeError:
             self._error(400, "invalid JSON body")
-        except (EngineError, TranscriptionError, pipeline.PipelineError, TeamsError) as exc:
+        except (EngineError, TranscriptionError, pipeline.PipelineError, TeamsError, ShareError) as exc:
             self._error(400, str(exc))
         except Exception as exc:
             self._error(500, f"{type(exc).__name__}: {exc}")
@@ -301,6 +331,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         meeting = pipeline.create_meeting(
             self.state.store, title=title, held_on=date.today(), status="recording"
         )
+        # Started from a calendar entry: carry the invite across, and record
+        # the event id so a later `teams pull` recognises the same meeting
+        # instead of importing a second copy of it.
+        event_id = str(payload.get("event_id", "")).strip()
+        if event_id:
+            meeting.source = "teams"
+            meeting.external_id = event_id
+        meeting.participants = [
+            str(name).strip() for name in payload.get("attendees", []) if str(name).strip()
+        ]
+        meeting.emails = [
+            str(address).strip() for address in payload.get("emails", []) if str(address).strip()
+        ]
         meeting.audio_path = str(recordings_dir() / f"{meeting.meeting_id}{suffix}")
         # Create the file now so an append never races the first chunk.
         Path(meeting.audio_path).touch()
@@ -394,9 +437,103 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "signed_in": auth.signed_in,
             "account": tokens.account if tokens else "",
             "recordings": bool(tokens and tokens.can_read_recordings),
+            "can_send_mail": auth.can_send_mail,
+            "mail": share_transports(self.state.settings, auth.signed_in and auth.can_send_mail),
             "login": self.state.job("teams-login"),
             "pull": self.state.job("teams-pull"),
         }
+
+    def _upcoming(self, query: dict[str, list[str]]) -> dict[str, Any]:
+        """The next few hours of calendar, annotated with what we already have."""
+        auth = self.state.teams_auth()
+        if not auth.signed_in:
+            return {"signed_in": False, "events": []}
+        hours = _positive_int((query.get("hours") or [""])[0], self.state.settings.calendar_horizon_hours)
+        events = upcoming(self.state.teams_client(), hours=hours)
+        rows = []
+        for event in events:
+            existing = self.state.store.find_external("teams", event.event_id)
+            rows.append(
+                {
+                    **event.to_dict(),
+                    "starts_in": event.starts_in(),
+                    "recorded_as": existing.meeting_id if existing else "",
+                }
+            )
+        return {"signed_in": True, "events": rows}
+
+    def _serve_audio(self, meeting: Meeting) -> None:
+        """Stream the recording, honouring Range so the player can seek."""
+        if not meeting.audio_path:
+            self._error(404, "this meeting has no recording")
+            return
+        path = Path(meeting.audio_path)
+        if not path.is_file():
+            self._error(404, "the recording file is missing from disk")
+            return
+
+        size = path.stat().st_size
+        content_type = _AUDIO_TYPES.get(path.suffix.lower(), "application/octet-stream")
+        start, end = _parse_range(self.headers.get("Range"), size)
+        partial = start is not None
+        first = start or 0
+        last = end if end is not None else size - 1
+        if first >= size or last < first:
+            self.send_response(416)
+            self.send_header("Content-Range", f"bytes */{size}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        length = last - first + 1
+
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(length))
+        self.send_header("Accept-Ranges", "bytes")
+        if partial:
+            self.send_header("Content-Range", f"bytes {first}-{last}/{size}")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command == "HEAD":
+            return
+
+        remaining = length
+        with path.open("rb") as handle:
+            handle.seek(first)
+            while remaining > 0:
+                chunk = handle.read(min(STREAM_CHUNK, remaining))
+                if not chunk:
+                    break
+                # A player that seeks away mid-stream drops the connection;
+                # that is normal, not an error worth a traceback.
+                with suppress(BrokenPipeError, ConnectionResetError):
+                    self.wfile.write(chunk)
+                remaining -= len(chunk)
+
+    def _handle_share(self, payload: dict[str, Any]) -> dict[str, Any]:
+        meeting = self.state.store.get_meeting(str(payload.get("meeting_id", "")))
+        if meeting is None:
+            raise pipeline.PipelineError("unknown meeting")
+        minutes = self.state.store.get_minutes(meeting.meeting_id)
+        if minutes is None:
+            raise pipeline.PipelineError("this meeting has no minutes to send yet")
+
+        recipients = payload.get("to")
+        message = compose(
+            minutes,
+            meeting,
+            self.state.store.get_transcript(meeting.meeting_id),
+            recipients=recipients if isinstance(recipients, list) else None,
+            note=str(payload.get("note", "")),
+            with_transcript=bool(payload.get("with_transcript")),
+        )
+        auth = self.state.teams_auth()
+        graph = self.state.teams_client() if auth.signed_in and auth.can_send_mail else None
+        result = send(
+            message, self.state.settings, graph=graph, via=str(payload.get("via", ""))
+        )
+        return result.to_dict()
 
     def _handle_teams_login(self) -> dict[str, Any]:
         """Start a device-code sign-in and poll for it on a worker thread.
@@ -519,9 +656,40 @@ class Handler(http.server.BaseHTTPRequestHandler):
         html = html.replace("__SESSION_TOKEN__", self.state.token)
         self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
 
+    def do_HEAD(self) -> None:
+        """Players probe with HEAD before streaming; answer with the headers."""
+        self.do_GET()
+
     def log_message(self, *args: Any) -> None:
         """Suppress the default access log; it would echo query strings."""
         return
+
+
+def _positive_int(raw: str, fallback: int) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return fallback
+    return value if value > 0 else fallback
+
+
+def _parse_range(header: str | None, size: int) -> tuple[int | None, int | None]:
+    """Parse a single-range ``bytes=`` header. Anything odd means "send it all"."""
+    if not header or not header.strip().lower().startswith("bytes="):
+        return None, None
+    spec = header.split("=", 1)[1].strip()
+    if "," in spec:  # multi-range is legal and not worth supporting here
+        return None, None
+    start_text, _, end_text = spec.partition("-")
+    try:
+        if not start_text:
+            # "bytes=-500" means the last 500 bytes.
+            length = int(end_text)
+            return max(0, size - length), size - 1
+        start = int(start_text)
+        return start, int(end_text) if end_text else size - 1
+    except ValueError:
+        return None, None
 
 
 def _free_port(preferred: int = 0) -> int:

@@ -35,6 +35,9 @@ TEAMS_SCOPES = (
     "OnlineMeetingTranscript.Read.All",
 )
 TEAMS_RECORDING_SCOPE = "OnlineMeetingRecording.Read.All"
+# Sending mail as the user is a meaningful power to hand an app, so it is opt-in
+# too: `minutely teams login --with-email`. The SMTP sender needs none of this.
+TEAMS_MAIL_SCOPE = "Mail.Send"
 
 # Recording containers the browser can produce and whisper can read.
 AUDIO_SUFFIXES = frozenset({".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".wav", ".flac"})
@@ -122,12 +125,29 @@ class Settings:
     # "organizations" covers work and school accounts, which are the only ones
     # the Teams meeting APIs support. A tenant GUID narrows it further.
     teams_tenant: str = "organizations"
+    # How far ahead the "up next" list looks, in hours.
+    calendar_horizon_hours: int = 12
+    # Outgoing mail. The password is never stored — it is read from
+    # MINUTELY_SMTP_PASSWORD at send time, the same stance as the API key.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_from: str = ""
+    smtp_starttls: bool = True
     # Automatically run transcribe + minutes when a browser recording stops.
     auto_process: bool = True
 
     @property
     def has_api_key(self) -> bool:
         return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+    @property
+    def smtp_password(self) -> str:
+        return os.environ.get("MINUTELY_SMTP_PASSWORD", "")
+
+    @property
+    def smtp_ready(self) -> bool:
+        return bool(self.smtp_host and (self.smtp_from or self.smtp_user))
 
     @property
     def client_id(self) -> str:

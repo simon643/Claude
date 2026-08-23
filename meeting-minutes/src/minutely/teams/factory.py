@@ -16,6 +16,7 @@ def build_auth(
     client_id: str = "",
     tenant: str = "",
     with_recordings: bool = False,
+    with_email: bool = False,
     transport: Transport = urllib_transport,
     token_path: Path | None = None,
 ) -> TeamsAuth:
@@ -24,6 +25,7 @@ def build_auth(
         client_id=client_id or settings.client_id,
         tenant=tenant or settings.teams_tenant,
         with_recordings=with_recordings,
+        with_email=with_email,
         transport=transport,
         token_path=token_path,
     )

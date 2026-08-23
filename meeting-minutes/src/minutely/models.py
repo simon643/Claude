@@ -293,6 +293,9 @@ class Meeting:
     audio_path: str = ""
     transcript_path: str = ""
     participants: list[str] = field(default_factory=list)
+    # Attendee addresses from the calendar invite, so "share these minutes"
+    # does not start with retyping everybody's email.
+    emails: list[str] = field(default_factory=list)
     status: str = "new"  # new | recording | transcribed | minuted
     # Where the meeting came from, and its id in that system. Together these
     # are what stop a second `minutely teams pull` from importing everything
@@ -310,6 +313,7 @@ class Meeting:
             "audio_path": self.audio_path,
             "transcript_path": self.transcript_path,
             "participants": self.participants,
+            "emails": self.emails,
             "status": self.status,
             "source": self.source,
             "external_id": self.external_id,
@@ -326,6 +330,7 @@ class Meeting:
             audio_path=str(raw.get("audio_path", "")),
             transcript_path=str(raw.get("transcript_path", "")),
             participants=[str(p) for p in raw.get("participants", [])],
+            emails=[str(e) for e in raw.get("emails", [])],
             status=str(raw.get("status", "new")),
             source=str(raw.get("source", "local")) or "local",
             external_id=str(raw.get("external_id", "")),

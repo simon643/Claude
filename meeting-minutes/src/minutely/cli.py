@@ -26,11 +26,15 @@ from .pipeline import (
     make_minutes,
 )
 from .pipeline import transcribe as run_transcribe
+from .share import ShareError, compose
+from .share import available as share_transports
+from .share import send as send_email
 from .store import Store
 from .teams import TeamsError
 from .teams.auth import DeviceCode
+from .teams.calendar import CalendarEvent, upcoming
 from .teams.factory import build_auth, build_client
-from .teams.sync import TeamsMeeting, list_meetings, pull_recent
+from .teams.sync import list_meetings, pull_recent
 from .transcribers import TranscriptionError
 from .transcribers.factory import TRANSCRIBERS, get_transcriber
 
@@ -314,6 +318,9 @@ def cmd_config(args: argparse.Namespace) -> int:
         "model",
         "teams_client_id",
         "teams_tenant",
+        "smtp_host",
+        "smtp_user",
+        "smtp_from",
     ):
         value = getattr(args, field, None)
         if value:
@@ -321,6 +328,12 @@ def cmd_config(args: argparse.Namespace) -> int:
             changed = True
     if args.auto_process is not None:
         settings.auto_process = args.auto_process
+        changed = True
+    if getattr(args, "smtp_port", None):
+        settings.smtp_port = args.smtp_port
+        changed = True
+    if getattr(args, "smtp_starttls", None) is not None:
+        settings.smtp_starttls = args.smtp_starttls
         changed = True
     if changed:
         settings.save()
@@ -345,9 +358,15 @@ def cmd_config(args: argparse.Namespace) -> int:
         print(f"language    : {settings.language}")
         print(f"auto process: {settings.auto_process}")
         teams_state = "not configured"
+        signed_in = False
         if settings.client_id:
-            teams_state = "signed in" if build_auth(settings).signed_in else "configured, not signed in"
+            signed_in = build_auth(settings).signed_in
+            teams_state = "signed in" if signed_in else "configured, not signed in"
         print(f"teams       : {teams_state}")
+        transports = share_transports(settings, signed_in and build_auth(settings).can_send_mail)
+        print(f"email       : {', '.join(transports) if transports else 'not configured'}")
+        if settings.smtp_host and not settings.smtp_password and settings.smtp_user:
+            print("              (MINUTELY_SMTP_PASSWORD is not set)")
         if changed:
             print("saved")
     return 0
@@ -400,6 +419,99 @@ def cmd_delete(args: argparse.Namespace) -> int:
         store.close()
 
 
+def cmd_upcoming(args: argparse.Namespace) -> int:
+    """What is coming up, so you know what you are about to record."""
+    store = Store()
+    try:
+        auth = build_auth()
+        if not auth.signed_in:
+            return _fail(
+                "not signed in to Microsoft 365, so there is no calendar to read — "
+                "run: minutely teams login",
+                args.json,
+            )
+        events = upcoming(build_client(), hours=args.hours)
+        rows = []
+        for event in events:
+            existing = store.find_external("teams", event.event_id)
+            rows.append({**event.to_dict(), "recorded_as": existing.meeting_id if existing else ""})
+    except TeamsError as exc:
+        return _fail(str(exc), args.json)
+    finally:
+        store.close()
+
+    _emit(rows, args.json)
+    if args.json:
+        return 0
+    if not rows:
+        print(f"nothing on your calendar in the next {args.hours} hours")
+        return 0
+    print(f"{'WHEN':<8} {'IN':<9} {'WHERE':<10} MEETING")
+    for row in rows:
+        event = next(e for e in events if e.event_id == row["event_id"])
+        away = event.starts_in()
+        when = event.start.astimezone().strftime("%H:%M")
+        relative = "now" if -60 <= away <= 5 else (f"{away} min" if away > 0 else "started")
+        where = "Teams" if event.is_teams else ("online" if event.online else "in person")
+        mark = " [recorded]" if row["recorded_as"] else ""
+        print(f"{when:<8} {relative:<9} {where:<10} {event.title}{mark}")
+    print()
+    print("Open `minutely record` to start recording one with a click.")
+    return 0
+
+
+def cmd_share(args: argparse.Namespace) -> int:
+    store = Store()
+    try:
+        meeting = _target(store, args)
+        if meeting is None:
+            return 1
+        minutes = store.get_minutes(meeting.meeting_id)
+        if minutes is None:
+            return _fail(
+                f"no minutes for {meeting.meeting_id} yet — run: minutely minutes {meeting.meeting_id}",
+                args.json,
+            )
+        transcript = store.get_transcript(meeting.meeting_id)
+        message = compose(
+            minutes,
+            meeting,
+            transcript,
+            recipients=args.to or None,
+            note=args.note or "",
+            with_transcript=args.with_transcript,
+        )
+
+        if args.dry_run:
+            payload = {
+                "subject": message.subject,
+                "recipients": message.recipients,
+                "attachments": [a.name for a in message.attachments],
+                "sent": False,
+            }
+            _emit(payload, args.json)
+            if not args.json:
+                print(f"To      : {', '.join(message.recipients)}")
+                print(f"Subject : {message.subject}")
+                print(f"Attached: {', '.join(a.name for a in message.attachments)}")
+                print("\n(dry run — nothing was sent)")
+            return 0
+
+        settings = Settings.load()
+        auth = build_auth(settings)
+        graph = build_client(settings) if auth.signed_in and auth.can_send_mail else None
+        result = send_email(message, settings, graph=graph, via=args.via or "")
+    except (ShareError, TeamsError) as exc:
+        return _fail(str(exc), args.json)
+    finally:
+        store.close()
+
+    _emit(result.to_dict(), args.json)
+    if not args.json:
+        print(f"sent to {', '.join(result.recipients)} via {result.via}")
+    return 0
+
+
 # --------------------------------------------------------------------------
 # Teams
 # --------------------------------------------------------------------------
@@ -412,6 +524,7 @@ def cmd_teams_login(args: argparse.Namespace) -> int:
         client_id=args.client_id or "",
         tenant=args.tenant or "",
         with_recordings=args.with_recordings,
+        with_email=args.with_email,
     )
 
     def announce(code: DeviceCode) -> None:
@@ -445,6 +558,7 @@ def cmd_teams_login(args: argparse.Namespace) -> int:
         "tenant": tokens.tenant,
         "scopes": tokens.scopes,
         "recordings": tokens.can_read_recordings,
+        "send_mail": tokens.can_send_mail,
     }
     _emit(payload, args.json)
     if not args.json:
@@ -464,6 +578,7 @@ def cmd_teams_status(args: argparse.Namespace) -> int:
         "client_id_set": bool(settings.client_id),
         "scopes": tokens.scopes if tokens else [],
         "recordings": bool(tokens and tokens.can_read_recordings),
+        "send_mail": bool(tokens and tokens.can_send_mail),
     }
     _emit(payload, args.json)
     if not args.json:
@@ -477,6 +592,7 @@ def cmd_teams_status(args: argparse.Namespace) -> int:
             print(f"signed in as {payload['account'] or '(unknown account)'}")
             print(f"  tenant     : {payload['tenant']}")
             print(f"  recordings : {'yes' if payload['recordings'] else 'no (transcripts only)'}")
+            print(f"  send mail  : {'yes' if payload['send_mail'] else 'no'}")
     return 0
 
 
@@ -517,7 +633,7 @@ def cmd_teams_pull(args: argparse.Namespace) -> int:
         settings = Settings.load()
         graph = build_client(settings)
 
-        def progress(meeting: TeamsMeeting) -> None:
+        def progress(meeting: CalendarEvent) -> None:
             if not args.json:
                 print(f"  checking {meeting.start.strftime('%Y-%m-%d')} {meeting.title}...")
 
@@ -658,6 +774,17 @@ def build_parser() -> argparse.ArgumentParser:
         dest="teams_tenant",
         help="Microsoft tenant id, or 'organizations' (default)",
     )
+    p.add_argument("--smtp-host", dest="smtp_host", help="outgoing mail server")
+    p.add_argument("--smtp-user", dest="smtp_user", help="SMTP username, if the server needs one")
+    p.add_argument("--smtp-from", dest="smtp_from", help="address minutes are sent from")
+    p.add_argument("--smtp-port", dest="smtp_port", type=int, help="SMTP port (default: 587)")
+    p.add_argument(
+        "--smtp-starttls",
+        dest="smtp_starttls",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="use STARTTLS (default: yes)",
+    )
     p.add_argument(
         "--auto-process",
         dest="auto_process",
@@ -666,6 +793,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="transcribe and minute automatically when a recording stops",
     )
     p.set_defaults(func=cmd_config)
+
+    p = sub.add_parser("upcoming", parents=[common], help="meetings coming up on your calendar")
+    p.add_argument("--hours", type=int, default=12, help="how far ahead to look (default: 12)")
+    p.set_defaults(func=cmd_upcoming)
+
+    p = sub.add_parser("share", parents=[common], help="email the minutes")
+    p.add_argument("meeting", nargs="?", default="")
+    p.add_argument(
+        "--to",
+        action="append",
+        help="recipient (repeatable). Defaults to the calendar invite's attendees.",
+    )
+    p.add_argument("--note", help="a line of your own above the minutes")
+    p.add_argument("--with-transcript", action="store_true", help="attach the full transcript too")
+    p.add_argument("--via", choices=["graph", "smtp"], help="force a mail transport")
+    p.add_argument("--dry-run", action="store_true", help="show what would be sent, send nothing")
+    p.set_defaults(func=cmd_share)
 
     teams = sub.add_parser(
         "teams",
@@ -686,6 +830,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--with-recordings",
         action="store_true",
         help="also request permission to download meeting recordings",
+    )
+    t.add_argument(
+        "--with-email",
+        action="store_true",
+        help="also request permission to send minutes from your mailbox",
     )
     t.set_defaults(func=cmd_teams_login)
 
@@ -735,7 +884,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130
-    except (PipelineError, EngineError, TranscriptionError, TeamsError) as exc:
+    except (PipelineError, EngineError, TranscriptionError, TeamsError, ShareError) as exc:
         return _fail(str(exc), getattr(args, "json", False))
 
 
