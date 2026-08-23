@@ -1,0 +1,91 @@
+WEBVTT
+
+00:00:02.000 --> 00:00:11.500
+<v Dana>Morning everyone. Thanks for making the time. I'm recording this one so nobody has to take notes — shout if you'd rather I didn't.
+
+00:00:12.000 --> 00:00:19.000
+<v Priya>Fine by me.
+
+00:00:19.500 --> 00:00:31.000
+<v Dana>Great. Three things today: the pilot rollout, the pricing change, and then the support backlog. Let's start with the pilot rollout.
+
+00:00:31.500 --> 00:00:48.000
+<v Marcus>So we've had eleven of the fifteen pilot customers onboarded. The four that are stuck are all waiting on the SSO integration, which is the same blocker we had last month.
+
+00:00:48.500 --> 00:01:02.000
+<v Priya>It's not the same blocker, actually. Two of them are on Okta and that works now. The other two are on a self-hosted Keycloak and we never tested that path.
+
+00:01:02.500 --> 00:01:14.000
+<v Dana>How long to test it?
+
+00:01:14.500 --> 00:01:29.000
+<v Priya>I'll spin up a Keycloak instance and run the integration suite against it. Give me until Thursday.
+
+00:01:29.500 --> 00:01:41.000
+<v Marcus>If it works, can we get the two remaining customers onboarded before the end of the month?
+
+00:01:41.500 --> 00:01:55.000
+<v Priya>Should be fine. The onboarding itself is half a day each once auth is sorted.
+
+00:01:55.500 --> 00:02:12.000
+<v Dana>Okay, so we're going with the Keycloak test first and we'll decide about the deadline once Priya reports back. Marcus, can you let those two customers know we're on it?
+
+00:02:12.500 --> 00:02:20.000
+<v Marcus>Yep, I'll email them today.
+
+00:02:20.500 --> 00:02:34.000
+<v Dana>Right, moving on to pricing. Sam, this is yours.
+
+00:02:34.500 --> 00:02:56.000
+<v Sam>Thanks. So the proposal is to move the mid tier from forty-nine to sixty-five a seat, and to fold the analytics add-on into it rather than charging separately. Finance modelled it at about eleven percent revenue uplift on the existing base, assuming five percent churn.
+
+00:02:56.500 --> 00:03:10.000
+<v Priya>Five percent seems optimistic. We raised prices eighteen months ago and lost closer to nine.
+
+00:03:10.500 --> 00:03:24.000
+<v Sam>That was a bigger jump proportionally, and we didn't bundle anything with it. But you're right that it's a guess.
+
+00:03:24.500 --> 00:03:40.000
+<v Marcus>The thing that worries me is the customers who bought analytics separately last quarter. They'll effectively be paying twice until renewal.
+
+00:03:40.500 --> 00:03:52.000
+<v Sam>There are nineteen of those. We could credit them.
+
+00:03:52.500 --> 00:04:09.000
+<v Dana>Let's go with the sixty-five price and bundle analytics, and we'll credit the nineteen customers who bought the add-on separately. That's decided. Sam, can you write that up as a one-pager for the board by next Tuesday?
+
+00:04:09.500 --> 00:04:17.000
+<v Sam>Will do.
+
+00:04:17.500 --> 00:04:29.000
+<v Dana>And someone needs to work out exactly what the credit looks like operationally.
+
+00:04:29.500 --> 00:04:44.000
+<v Sam>I'll take that too — I'll talk to Finance and come back with the mechanics.
+
+00:04:44.500 --> 00:05:01.000
+<v Priya>One open question: do we grandfather anyone who signed in the last thirty days? We don't know how many that is.
+
+00:05:01.500 --> 00:05:12.000
+<v Dana>Good question. Park that, we'll pick it up when Sam has the numbers.
+
+00:05:12.500 --> 00:05:26.000
+<v Dana>Last item, the support backlog. Marcus?
+
+00:05:26.500 --> 00:05:48.000
+<v Marcus>It's at two hundred and forty tickets, up from one-ninety a fortnight ago. About a third of them are the same billing-export bug. If engineering fixes that, the backlog drops to something we can actually clear.
+
+00:05:48.500 --> 00:06:03.000
+<v Priya>That bug is on our board. It's not scheduled because it was P3, but if it's a third of the backlog it isn't a P3.
+
+00:06:03.500 --> 00:06:15.000
+<v Dana>Agreed, let's reprioritise it to P1.
+
+00:06:15.500 --> 00:06:29.000
+<v Priya>I'll move it and put it in this sprint. It should ship by Friday.
+
+00:06:29.500 --> 00:06:47.000
+<v Marcus>Thanks. I'll draft a note to the affected customers so it goes out the same day the fix lands.
+
+00:06:47.500 --> 00:07:02.000
+<v Dana>Perfect. Anything else? No? Then we're done — thanks everyone.

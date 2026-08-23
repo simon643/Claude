@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>minutely</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #16181d; --muted: #666d7d;
+  --line: #e3e5ea; --accent: #2f6df6; --accent-ink: #fff;
+  --rec: #d13438; --ok: #1a7f4b; --warn: #a4610f; --warn-bg: #fff7e6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #101216; --panel: #181b21; --ink: #e9ebef; --muted: #99a0ae;
+          --line: #282c35; --warn-bg: #2a2410; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: baseline; gap: .75rem; padding: 1rem 1.5rem;
+         border-bottom: 1px solid var(--line); background: var(--panel); }
+header h1 { font-size: 1.05rem; margin: 0; letter-spacing: -0.01em; }
+header .sub { color: var(--muted); font-size: .85rem; }
+nav { margin-left: auto; display: flex; gap: .25rem; }
+nav button { background: none; border: 1px solid transparent; color: var(--muted);
+             padding: .35rem .7rem; border-radius: 7px; cursor: pointer; font-size: .9rem; }
+nav button.on { background: var(--bg); color: var(--ink); border-color: var(--line); }
+main { display: grid; grid-template-columns: 20rem 1fr; gap: 1.25rem; padding: 1.25rem 1.5rem;
+       align-items: start; max-width: 78rem; margin: 0 auto; }
+@media (max-width: 62rem) { main { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; }
+.panel + .panel { margin-top: 1rem; }
+h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em;
+     color: var(--muted); margin: 0 0 .7rem; font-weight: 600; }
+h3 { font-size: 1rem; margin: 1.2rem 0 .35rem; }
+label { display: block; font-size: .8rem; color: var(--muted); margin: .6rem 0 .2rem; }
+input[type=text], select, textarea {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: inherit; font-size: .92rem; }
+button.primary { background: var(--accent); color: var(--accent-ink); border: none;
+  padding: .6rem 1rem; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
+button.primary.rec { background: var(--rec); }
+button.primary:disabled { opacity: .5; cursor: not-allowed; }
+button.ghost { background: none; border: 1px solid var(--line); color: var(--ink);
+  padding: .35rem .65rem; border-radius: 7px; font: inherit; font-size: .85rem; cursor: pointer; }
+.row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.check { display: flex; gap: .5rem; align-items: flex-start; font-size: .87rem; color: var(--muted); margin-top: .7rem; }
+.timer { font-variant-numeric: tabular-nums; font-size: 2rem; font-weight: 600; letter-spacing: -.02em; }
+.dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--rec); display: inline-block;
+       animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: .6rem; }
+.meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .1s linear; }
+ul.meetings { list-style: none; margin: 0; padding: 0; }
+ul.meetings li { padding: .5rem .55rem; border-radius: 8px; cursor: pointer; }
+ul.meetings li:hover { background: var(--bg); }
+ul.meetings li.on { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+ul.meetings .t { font-size: .92rem; }
+ul.meetings .d { font-size: .78rem; color: var(--muted); }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+td.done { text-decoration: line-through; color: var(--muted); }
+.cite { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font-size: .72rem; padding: .12rem .45rem; border-radius: 999px;
+        border: 1px solid var(--line); color: var(--muted); }
+.notice { background: var(--warn-bg); border: 1px solid var(--line); color: var(--warn);
+          border-radius: 9px; padding: .6rem .75rem; font-size: .85rem; }
+.err { color: var(--rec); font-size: .87rem; margin-top: .6rem; white-space: pre-wrap; }
+.muted { color: var(--muted); }
+.hidden { display: none !important; }
+pre.md { white-space: pre-wrap; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+         background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: .8rem; max-height: 26rem; overflow: auto; }
+.spin { display: inline-block; width: .8rem; height: .8rem; border: 2px solid var(--line);
+        border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
+</style>
+</head>
+<body>
+<header>
+  <h1>minutely</h1>
+  <span class="sub" id="statusline">local recorder</span>
+  <nav>
+    <button id="tab-record" class="on">Record</button>
+    <button id="tab-actions">Action register</button>
+  </nav>
+</header>
+
+<main>
+  <div>
+    <section class="panel" id="recorder">
+      <h2>New recording</h2>
+      <div id="idle-form">
+        <label for="title">Meeting title</label>
+        <input type="text" id="title" placeholder="Weekly product sync" autocomplete="off">
+        <div class="check">
+          <input type="checkbox" id="withTab">
+          <label for="withTab" style="margin:0">Also capture the meeting tab's audio (for Zoom / Teams / Meet in a browser tab)</label>
+        </div>
+        <div class="check">
+          <input type="checkbox" id="autoProcess" checked>
+          <label for="autoProcess" style="margin:0">Transcribe and write minutes when I stop</label>
+        </div>
+        <p style="margin:.9rem 0 .6rem"><button class="primary" id="start">Start recording</button></p>
+        <p class="notice">Tell everyone in the room that you are recording. In many places recording
+        a conversation without the other party's consent is unlawful.</p>
+      </div>
+      <div id="live-form" class="hidden">
+        <div class="row" style="justify-content:space-between">
+          <span class="timer" id="timer">00:00</span>
+          <span class="muted"><span class="dot"></span> recording</span>
+        </div>
+        <div class="meter"><i id="level"></i></div>
+        <p class="muted" style="font-size:.82rem;margin:.6rem 0">Saved to disk continuously — a crash loses seconds, not the meeting.</p>
+        <button class="primary rec" id="stop">Stop and save</button>
+      </div>
+      <div class="err" id="rec-error"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Meetings</h2>
+      <ul class="meetings" id="meeting-list"></ul>
+      <p class="muted" id="no-meetings" style="font-size:.87rem">Nothing recorded yet.</p>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel" id="detail">
+      <h2>Minutes</h2>
+      <p class="muted" id="detail-empty">Record a meeting, or pick one from the list.</p>
+      <div id="detail-body" class="hidden"></div>
+    </section>
+
+    <section class="panel hidden" id="actions-panel">
+      <h2>Action register — every meeting</h2>
+      <div class="row" style="margin-bottom:.6rem">
+        <select id="action-filter" style="width:auto">
+          <option value="open">Open</option>
+          <option value="done">Done</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div id="action-table"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const TOKEN = "__SESSION_TOKEN__";
+const $ = (id) => document.getElementById(id);
+
+async function api(path, options) {
+  const opts = Object.assign({ headers: {} }, options || {});
+  opts.headers["X-Session-Token"] = TOKEN;
+  if (opts.json !== undefined) {
+    opts.method = opts.method || "POST";
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(opts.json);
+    delete opts.json;
+  }
+  const res = await fetch(path, opts);
+  const type = res.headers.get("content-type") || "";
+  const payload = type.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) throw new Error((payload && payload.error) || res.statusText);
+  return payload;
+}
+
+const state = { meetingId: null, recorder: null, stream: null, tracks: [], audioCtx: null,
+                startedAt: 0, ticker: null, poller: null, tab: "record" };
+
+// ---------------------------------------------------------------- recording
+
+async function startRecording() {
+  $("rec-error").textContent = "";
+  let mic;
+  try {
+    mic = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (err) {
+    $("rec-error").textContent = "Microphone unavailable: " + err.message +
+      "\nCheck the browser's site permissions for 127.0.0.1.";
+    return;
+  }
+  state.tracks = mic.getTracks();
+
+  let stream = mic;
+  if ($("withTab").checked) {
+    try {
+      // Merging the mic with the meeting tab is the only way to capture the
+      // people who are not in the room. Chrome offers tab audio here; Firefox
+      // and Safari generally do not, so this stays optional and non-fatal.
+      const display = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+      const shared = display.getAudioTracks();
+      display.getVideoTracks().forEach((t) => t.stop());  // audio only; no screen is kept
+      if (shared.length === 0) {
+        display.getTracks().forEach((t) => t.stop());
+        $("rec-error").textContent = "That share had no audio — recording the microphone only. " +
+          "Pick a tab and tick 'Share tab audio'.";
+      } else {
+        state.tracks = state.tracks.concat(display.getTracks());
+        const ctx = new AudioContext();
+        const mixer = ctx.createMediaStreamDestination();
+        ctx.createMediaStreamSource(mic).connect(mixer);
+        ctx.createMediaStreamSource(new MediaStream(shared)).connect(mixer);
+        state.audioCtx = ctx;
+        stream = mixer.stream;
+      }
+    } catch (err) {
+      $("rec-error").textContent = "Tab audio not captured (" + err.message + "). Recording the microphone only.";
+    }
+  }
+
+  const mime = pickMime();
+  let recorder;
+  try {
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  } catch (err) {
+    stopTracks();
+    $("rec-error").textContent = "This browser cannot record audio: " + err.message;
+    return;
+  }
+
+  let started;
+  try {
+    started = await api("/api/record/start", { json: { title: $("title").value, mime: recorder.mimeType || mime } });
+  } catch (err) {
+    stopTracks();
+    $("rec-error").textContent = "Could not start: " + err.message;
+    return;
+  }
+
+  state.meetingId = started.meeting.meeting_id;
+  state.recorder = recorder;
+  state.stream = stream;
+  state.startedAt = Date.now();
+
+  recorder.ondataavailable = async (event) => {
+    if (!event.data || event.data.size === 0) return;
+    try {
+      await fetch("/api/record/chunk?meeting=" + encodeURIComponent(state.meetingId), {
+        method: "POST",
+        headers: { "X-Session-Token": TOKEN, "Content-Type": "application/octet-stream" },
+        body: event.data,
+      });
+    } catch (err) {
+      $("rec-error").textContent = "A chunk failed to save: " + err.message;
+    }
+  };
+  // Five-second slices: frequent enough that a crash costs almost nothing,
+  // rare enough that the request rate stays trivial.
+  recorder.start(5000);
+
+  meter(stream);
+  $("idle-form").classList.add("hidden");
+  $("live-form").classList.remove("hidden");
+  state.ticker = setInterval(tick, 250);
+  tick();
+}
+
+function pickMime() {
+  const options = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+  for (const candidate of options) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(candidate)) return candidate;
+  }
+  return "";
+}
+
+function tick() {
+  const secs = Math.floor((Date.now() - state.startedAt) / 1000);
+  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+  const ss = String(secs % 60).padStart(2, "0");
+  const hh = Math.floor(secs / 3600);
+  $("timer").textContent = hh > 0 ? hh + ":" + mm.slice(-2) + ":" + ss : mm + ":" + ss;
+}
+
+function meter(stream) {
+  try {
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const draw = () => {
+      if (!state.recorder) { ctx.close(); return; }
+      analyser.getByteTimeDomainData(data);
+      let peak = 0;
+      for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
+      $("level").style.width = Math.min(100, (peak / 128) * 220) + "%";
+      requestAnimationFrame(draw);
+    };
+    draw();
+  } catch (err) { /* the meter is decoration; never let it break a recording */ }
+}
+
+async function stopRecording() {
+  const recorder = state.recorder;
+  if (!recorder) return;
+  $("stop").disabled = true;
+  const duration = (Date.now() - state.startedAt) / 1000;
+
+  await new Promise((resolve) => {
+    recorder.onstop = resolve;
+    recorder.stop();
+  });
+  // The final ondataavailable is dispatched asynchronously; give it a moment
+  // to reach the server before we ask the server how big the file is.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  stopTracks();
+
+  state.recorder = null;
+  clearInterval(state.ticker);
+  $("live-form").classList.add("hidden");
+  $("idle-form").classList.remove("hidden");
+  $("stop").disabled = false;
+  $("level").style.width = "0";
+
+  try {
+    await api("/api/record/stop", {
+      json: {
+        meeting_id: state.meetingId,
+        title: $("title").value,
+        duration: duration,
+        process: $("autoProcess").checked,
+      },
+    });
+  } catch (err) {
+    $("rec-error").textContent = err.message;
+  }
+  $("title").value = "";
+  await refreshMeetings();
+  await openMeeting(state.meetingId);
+}
+
+function stopTracks() {
+  state.tracks.forEach((track) => track.stop());
+  state.tracks = [];
+  if (state.audioCtx) { state.audioCtx.close(); state.audioCtx = null; }
+}
+
+// ------------------------------------------------------------------- views
+
+async function refreshMeetings() {
+  const data = await api("/api/meetings");
+  const list = $("meeting-list");
+  list.innerHTML = "";
+  $("no-meetings").classList.toggle("hidden", data.meetings.length > 0);
+  for (const meeting of data.meetings) {
+    const li = document.createElement("li");
+    li.className = meeting.meeting_id === state.meetingId ? "on" : "";
+    const title = document.createElement("div");
+    title.className = "t";
+    title.textContent = meeting.title || "Untitled meeting";
+    const sub = document.createElement("div");
+    sub.className = "d";
+    sub.textContent = (meeting.held_on || "") + " · " + meeting.status;
+    li.append(title, sub);
+    li.onclick = () => openMeeting(meeting.meeting_id);
+    list.append(li);
+  }
+}
+
+async function openMeeting(meetingId) {
+  if (!meetingId) return;
+  state.meetingId = meetingId;
+  showTab("record");
+  const data = await api("/api/meeting?id=" + encodeURIComponent(meetingId));
+  renderMeeting(data);
+  await refreshMeetings();
+
+  clearInterval(state.poller);
+  if (data.job && data.job.state === "running") {
+    state.poller = setInterval(async () => {
+      const job = await api("/api/job?meeting=" + encodeURIComponent(meetingId));
+      if (job.state === "running") {
+        $("job-line").innerHTML = '<span class="spin"></span> ' + escapeHtml(job.message || "working");
+        return;
+      }
+      clearInterval(state.poller);
+      openMeeting(meetingId);
+    }, 2000);
+  }
+}
+
+function renderMeeting(data) {
+  const meeting = data.meeting;
+  const minutes = data.minutes;
+  const body = $("detail-body");
+  $("detail-empty").classList.add("hidden");
+  body.classList.remove("hidden");
+  body.innerHTML = "";
+
+  const head = document.createElement("div");
+  head.innerHTML =
+    "<h3 style='margin-top:0'>" + escapeHtml(meeting.title || "Untitled meeting") + "</h3>" +
+    "<p class='muted' style='font-size:.85rem;margin:.1rem 0 .8rem'>" +
+    escapeHtml(meeting.held_on || "") + " · " + escapeHtml(meeting.status) +
+    (meeting.duration ? " · " + Math.round(meeting.duration / 60) + " min" : "") + "</p>";
+  body.append(head);
+
+  const job = document.createElement("p");
+  job.id = "job-line";
+  job.className = "muted";
+  job.style.fontSize = ".87rem";
+  if (data.job && data.job.state === "running") {
+    job.innerHTML = '<span class="spin"></span> ' + escapeHtml(data.job.message || "working");
+  } else if (data.job && data.job.state === "error") {
+    job.className = "err";
+    job.textContent = data.job.message;
+  }
+  body.append(job);
+
+  const controls = document.createElement("div");
+  controls.className = "row";
+  controls.style.margin = ".4rem 0 1rem";
+  const regen = document.createElement("button");
+  regen.className = "ghost";
+  regen.textContent = minutes ? "Regenerate minutes" : "Transcribe and write minutes";
+  regen.onclick = async () => {
+    regen.disabled = true;
+    try {
+      await api("/api/process", { json: { meeting_id: meeting.meeting_id } });
+      await openMeeting(meeting.meeting_id);
+    } catch (err) { job.className = "err"; job.textContent = err.message; }
+    regen.disabled = false;
+  };
+  controls.append(regen);
+
+  if (minutes) {
+    const copy = document.createElement("button");
+    copy.className = "ghost";
+    copy.textContent = "Copy markdown";
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(data.markdown); copy.textContent = "Copied"; }
+      catch (err) { copy.textContent = "Copy failed — select the text below"; }
+      setTimeout(() => { copy.textContent = "Copy markdown"; }, 2000);
+    };
+    const open = document.createElement("button");
+    open.className = "ghost";
+    open.textContent = "Printable page";
+    open.onclick = () => window.open(
+      "/api/export?id=" + encodeURIComponent(meeting.meeting_id) + "&fmt=html&token=" + encodeURIComponent(TOKEN),
+      "_blank", "noopener");
+    controls.append(copy, open);
+  }
+  body.append(controls);
+
+  if (!minutes) {
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.style.fontSize = ".9rem";
+    hint.textContent = "No minutes yet.";
+    body.append(hint);
+    return;
+  }
+
+  body.append(section("Summary", para(minutes.summary)));
+
+  if (minutes.topics.length) {
+    const wrap = document.createElement("div");
+    for (const topic of minutes.topics) {
+      const h = document.createElement("h3");
+      h.textContent = topic.title;
+      const ul = document.createElement("ul");
+      for (const point of topic.points) {
+        const li = document.createElement("li");
+        li.textContent = point;
+        ul.append(li);
+      }
+      wrap.append(h, ul);
+    }
+    body.append(section("Discussion", wrap));
+  }
+
+  if (minutes.decisions.length) {
+    const ol = document.createElement("ol");
+    for (const decision of minutes.decisions) {
+      const li = document.createElement("li");
+      li.textContent = decision.text;
+      ol.append(li);
+    }
+    body.append(section("Decisions", ol));
+  }
+
+  body.append(section("Action points", actionTable(minutes.actions, () => openMeeting(meeting.meeting_id))));
+
+  if (minutes.open_questions.length) {
+    const ul = document.createElement("ul");
+    for (const question of minutes.open_questions) {
+      const li = document.createElement("li");
+      li.textContent = question;
+      ul.append(li);
+    }
+    body.append(section("Open questions", ul));
+  }
+
+  if (minutes.review.length) {
+    const ul = document.createElement("ul");
+    for (const item of minutes.review) {
+      const li = document.createElement("li");
+      li.textContent = item.text + (item.owner ? " — " + item.owner : "");
+      ul.append(li);
+    }
+    const note = document.createElement("div");
+    note.className = "notice";
+    note.append(document.createTextNode("Detected but not confidently a commitment — confirm before circulating."));
+    note.append(ul);
+    body.append(section("Possible actions", note));
+  }
+
+  const md = document.createElement("pre");
+  md.className = "md";
+  md.textContent = data.markdown;
+  body.append(section("Markdown", md));
+}
+
+function actionTable(actions, onChange) {
+  if (!actions.length) return para("None recorded.");
+  const table = document.createElement("table");
+  table.innerHTML = "<thead><tr><th></th><th>Action</th><th>Owner</th><th>Due</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const item of actions) {
+    const tr = document.createElement("tr");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = item.status === "done";
+    box.onchange = async () => {
+      box.disabled = true;
+      try {
+        await api("/api/action", { json: { id: item.id, status: box.checked ? "done" : "open" } });
+        if (onChange) onChange();
+      } finally { box.disabled = false; }
+    };
+    const tick = document.createElement("td");
+    tick.append(box);
+    const text = document.createElement("td");
+    text.textContent = item.text;
+    if (item.status === "done") text.className = "done";
+    const owner = document.createElement("td");
+    owner.textContent = item.owner || "—";
+    if (!item.owner) owner.className = "muted";
+    const due = document.createElement("td");
+    due.textContent = item.due || "—";
+    tr.append(tick, text, owner, due);
+    tbody.append(tr);
+  }
+  table.append(tbody);
+  return table;
+}
+
+function section(title, node) {
+  const wrap = document.createElement("div");
+  const h = document.createElement("h2");
+  h.textContent = title;
+  h.style.marginTop = "1.4rem";
+  wrap.append(h, node);
+  return wrap;
+}
+
+function para(text) {
+  const p = document.createElement("p");
+  p.textContent = text || "";
+  p.style.margin = ".2rem 0";
+  return p;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text == null ? "" : String(text);
+  return div.innerHTML;
+}
+
+// --------------------------------------------------------- action register
+
+async function refreshActions() {
+  const status = $("action-filter").value;
+  const data = await api("/api/actions?status=" + encodeURIComponent(status));
+  const host = $("action-table");
+  host.innerHTML = "";
+  if (!data.actions.length) {
+    host.append(para("Nothing here."));
+    return;
+  }
+  const table = document.createElement("table");
+  table.innerHTML = "<thead><tr><th></th><th>Action</th><th>Owner</th><th>Due</th><th>Meeting</th></tr></thead>";
+  const tbody = document.createElement("tbody");
+  for (const row of data.actions) {
+    const tr = document.createElement("tr");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = row.status === "done";
+    box.onchange = async () => {
+      await api("/api/action", { json: { id: row.id, status: box.checked ? "done" : "open" } });
+      refreshActions();
+    };
+    const tick = document.createElement("td");
+    tick.append(box);
+    const text = document.createElement("td");
+    text.textContent = row.text;
+    if (row.status === "done") text.className = "done";
+    const owner = document.createElement("td");
+    owner.textContent = row.owner || "—";
+    const due = document.createElement("td");
+    due.textContent = row.due || "—";
+    const meeting = document.createElement("td");
+    const link = document.createElement("a");
+    link.href = "#";
+    link.textContent = row.meeting_title || row.meeting_held_on || row.meeting_id;
+    link.onclick = (event) => { event.preventDefault(); openMeeting(row.meeting_id); };
+    meeting.append(link);
+    tr.append(tick, text, owner, due, meeting);
+    tbody.append(tr);
+  }
+  table.append(tbody);
+  host.append(table);
+}
+
+function showTab(name) {
+  state.tab = name;
+  $("tab-record").classList.toggle("on", name === "record");
+  $("tab-actions").classList.toggle("on", name === "actions");
+  $("recorder").classList.toggle("hidden", name !== "record");
+  $("detail").classList.toggle("hidden", name !== "record");
+  $("actions-panel").classList.toggle("hidden", name !== "actions");
+  if (name === "actions") refreshActions();
+}
+
+// -------------------------------------------------------------------- boot
+
+$("start").onclick = startRecording;
+$("stop").onclick = stopRecording;
+$("tab-record").onclick = () => showTab("record");
+$("tab-actions").onclick = () => showTab("actions");
+$("action-filter").onchange = refreshActions;
+
+window.addEventListener("beforeunload", (event) => {
+  if (state.recorder) { event.preventDefault(); event.returnValue = ""; }
+});
+
+(async () => {
+  try {
+    const info = await api("/api/state");
+    $("autoProcess").checked = info.auto_process;
+    const bits = [info.engine + " engine"];
+    bits.push(info.transcriber_ready ? info.transcriber + " ready" : "no transcriber — import transcripts");
+    bits.push(info.stats.open_actions + " open actions");
+    $("statusline").textContent = bits.join(" · ");
+    if (!info.transcriber_ready) {
+      $("rec-error").textContent =
+        "No speech-recognition binary found, so recordings will not be transcribed automatically. " +
+        "Install whisper.cpp or openai-whisper, or import a transcript with `minutely import`.";
+    }
+  } catch (err) {
+    $("statusline").textContent = "cannot reach the local server";
+  }
+  await refreshMeetings();
+})();
+</script>
+</body>
+</html>

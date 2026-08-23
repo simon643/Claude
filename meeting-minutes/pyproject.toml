@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "minutely"
+version = "0.1.0"
+description = "Record a meeting in the browser, transcribe it locally, and turn it into minutes with owned action points."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.14"
+keywords = ["meetings", "minutes", "transcription", "action-items", "notes"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+    "Topic :: Multimedia :: Sound/Audio :: Capture/Recording",
+]
+
+# No runtime dependencies. Meeting audio is about as private as data gets, so
+# the default install has no third-party code in the path between the
+# microphone and the disk: recording is the browser's MediaRecorder, the
+# server is http.server, storage is sqlite3, and the offline minutes engine is
+# plain Python. Transcription shells out to a whisper binary the user chose to
+# install; the Claude engine is an opt-in extra.
+dependencies = []
+
+[project.optional-dependencies]
+# Only needed for `--engine claude`. The rules engine works without it.
+llm = ["anthropic>=0.40"]
+dev = [
+    "pytest>=7.4",
+    "ruff>=0.3",
+    "mypy>=1.8",
+]
+
+[project.scripts]
+minutely = "minutely.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/minutely"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "data", "README.md"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "RUF"]
+ignore = ["E501", "B904", "SIM105"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+# The Anthropic SDK is an optional extra; the default install does not have it
+# and must still type-check.
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "anthropic"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers"

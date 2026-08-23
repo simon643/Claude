@@ -4,18 +4,23 @@ name: CI
 # branch, so the workflow never ran — the project has been without CI. Matching
 # on paths instead keeps it working whatever the default branch is called.
 #
-# paths-ignore keeps hyperresearch's suite out of xerobk-only changes. Note that
-# a PR touching *only* ignored paths produces no run at all, so do not mark
-# these as required checks without accounting for that.
+# paths-ignore keeps hyperresearch's suite out of changes that only touch a
+# sibling project (xerobk, minutely). Note that a PR touching *only* ignored
+# paths produces no run at all, so do not mark these as required checks without
+# accounting for that.
 on:
   push:
     paths-ignore:
       - "xero-bookkeeper/**"
       - ".github/workflows/xerobk-ci.yml"
+      - "meeting-minutes/**"
+      - ".github/workflows/minutely-ci.yml"
   pull_request:
     paths-ignore:
       - "xero-bookkeeper/**"
       - ".github/workflows/xerobk-ci.yml"
+      - "meeting-minutes/**"
+      - ".github/workflows/minutely-ci.yml"
   workflow_dispatch:
 
 concurrency:

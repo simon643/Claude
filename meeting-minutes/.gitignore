@@ -1,0 +1,32 @@
+# Meeting audio and transcripts are private by default. `minutely` writes them
+# under its data directory, never into the repository, but keep the obvious
+# stragglers out of git anyway.
+recordings/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+config.json
+*.webm
+*.m4a
+*.mp3
+*.wav
+*.vtt
+# The one exception: the synthetic transcript `minutely demo` runs on. It ships
+# inside the package, so an ignore rule here would drop it from the wheel too.
+!src/minutely/data/demo.vtt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
