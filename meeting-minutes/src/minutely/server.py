@@ -54,6 +54,8 @@ from .teams.calendar import upcoming
 from .teams.factory import build_auth, build_client
 from .teams.graph import GraphClient
 from .teams.sync import pull_recent
+from .templates import NAMES as TEMPLATE_NAMES
+from .templates import catalogue
 from .transcribers import TranscriptionError
 from .transcribers.factory import get_transcriber
 
@@ -200,6 +202,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 {
                     "engine": self.state.settings.engine,
                     "engines": list(ENGINES),
+                    "templates": catalogue(),
                     "transcriber": self.state.settings.transcriber,
                     "transcriber_ready": transcriber.available(),
                     "auto_process": self.state.settings.auto_process,
@@ -309,6 +312,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._json(self._handle_action(payload))
             elif path == "/api/meeting/update":
                 self._json(self._handle_update(payload))
+            elif path == "/api/notes":
+                self._json(self._handle_notes(payload))
             elif path == "/api/share":
                 self._json(self._handle_share(payload))
             elif path == "/api/teams/login":
@@ -344,6 +349,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         meeting.emails = [
             str(address).strip() for address in payload.get("emails", []) if str(address).strip()
         ]
+        template = str(payload.get("template", "")).strip()
+        if template in TEMPLATE_NAMES:
+            meeting.template = template
         meeting.audio_path = str(recordings_dir() / f"{meeting.meeting_id}{suffix}")
         # Create the file now so an append never races the first chunk.
         Path(meeting.audio_path).touch()
@@ -405,7 +413,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if meeting is None:
             raise pipeline.PipelineError("unknown meeting")
         engine = str(payload.get("engine", "")) or None
-        self._start_job(meeting, engine)
+        template = str(payload.get("template", "")) or None
+        if template is not None and template not in TEMPLATE_NAMES:
+            raise pipeline.PipelineError(f"unknown template {template!r}")
+        self._start_job(meeting, engine, template)
         return {"ok": True, "job": self.state.job(meeting.meeting_id)}
 
     def _handle_action(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -425,7 +436,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         title = str(payload.get("title", "")).strip()
         if title:
             meeting.title = title
+        template = str(payload.get("template", "")).strip()
+        if template:
+            if template not in TEMPLATE_NAMES:
+                raise pipeline.PipelineError(f"unknown template {template!r}")
+            meeting.template = template
         return {"meeting": self.state.store.upsert_meeting(meeting).to_dict()}
+
+    def _handle_notes(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Save the notes as they are typed.
+
+        Called on a debounce while a meeting is running, so it has to be cheap
+        and it has to never lose anything: the notes are the one artefact here
+        that cannot be regenerated.
+        """
+        meeting_id = str(payload.get("meeting_id", ""))
+        if self.state.store.get_meeting(meeting_id) is None:
+            raise pipeline.PipelineError("unknown meeting")
+        notes = str(payload.get("notes", ""))
+        self.state.store.set_notes(meeting_id, notes)
+        return {"ok": True, "characters": len(notes)}
 
     # -- Teams ------------------------------------------------------------
 
@@ -608,7 +638,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     # -- background work --------------------------------------------------
 
-    def _start_job(self, meeting: Meeting, engine: str | None) -> None:
+    def _start_job(self, meeting: Meeting, engine: str | None, template: str | None = None) -> None:
         current = self.state.job(meeting.meeting_id)
         if current.get("state") == "running":
             return
@@ -632,7 +662,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if refreshed is not None:
                         fresh = refreshed
                 self.state.set_job(fresh.meeting_id, "running", "writing minutes", "minutes")
-                pipeline.make_minutes(store, fresh, self.state.settings, engine=engine)
+                pipeline.make_minutes(
+                    store, fresh, self.state.settings, engine=engine, template=template
+                )
                 self.state.set_job(fresh.meeting_id, "done", "minutes ready")
             except (EngineError, TranscriptionError, pipeline.PipelineError) as exc:
                 self.state.set_job(meeting.meeting_id, "error", str(exc))

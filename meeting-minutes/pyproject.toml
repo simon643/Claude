@@ -38,6 +38,10 @@ dev = [
     "ruff>=0.3",
     "mypy>=1.8",
 ]
+# Drives the browser UI in tests/test_ui_browser.py. Those tests skip
+# themselves when it is absent, so the ordinary dev install stays small:
+#   pip install -e ".[ui-tests]" && playwright install chromium
+ui-tests = ["playwright>=1.40"]
 
 [project.scripts]
 minutely = "minutely.cli:main"

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from minutely.models import ActionItem, Meeting, Minutes
 from minutely.store import Store
 
@@ -128,3 +130,68 @@ def test_stats_counts_open_and_done(store: Store) -> None:
     assert first is not None
     store.set_action_status(first, "done")
     assert store.stats() == {"meetings": 1, "open_actions": 1, "done_actions": 1}
+
+
+def test_typed_notes_survive_a_write_that_knows_nothing_about_them(store: Store) -> None:
+    make_meeting(store)
+    store.set_notes("m1", "Pricing\n- 49 -> 65")
+    # Most writes — a transcript landing, a title change — carry no notes at
+    # all. None of them may erase the one artefact a person made by hand.
+    store.upsert_meeting(Meeting(meeting_id="m1", title="Sync v2", held_on="2026-08-24"))
+    found = store.get_meeting("m1")
+    assert found is not None and found.notes == "Pricing\n- 49 -> 65"
+
+
+def test_notes_can_be_cleared_but_only_deliberately(store: Store) -> None:
+    make_meeting(store)
+    store.set_notes("m1", "something")
+    assert store.set_notes("m1", "") is True
+    found = store.get_meeting("m1")
+    assert found is not None and found.notes == ""
+
+
+def test_setting_notes_on_a_meeting_that_is_not_there(store: Store) -> None:
+    assert store.set_notes("nope", "text") is False
+
+
+def test_the_template_choice_is_remembered(store: Store) -> None:
+    meeting = make_meeting(store)
+    meeting.template = "standup"
+    store.upsert_meeting(meeting)
+    found = store.get_meeting("m1")
+    assert found is not None and found.template == "standup"
+
+
+def test_an_older_database_is_migrated_in_place(tmp_path: Path) -> None:
+    """A database written before notes existed must open, not explode."""
+    import sqlite3
+
+    path = tmp_path / "old.sqlite3"
+    with sqlite3.connect(path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE schema_version (version INTEGER NOT NULL);
+            INSERT INTO schema_version (version) VALUES (1);
+            CREATE TABLE meetings (
+                meeting_id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '',
+                held_on TEXT NOT NULL DEFAULT '', duration REAL,
+                audio_path TEXT NOT NULL DEFAULT '', transcript_path TEXT NOT NULL DEFAULT '',
+                participants TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'new',
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+            INSERT INTO meetings (meeting_id, title, created_at, updated_at)
+            VALUES ('old-1', 'Ancient sync', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+            """
+        )
+
+    store = Store(path)
+    try:
+        found = store.get_meeting("old-1")
+        assert found is not None
+        assert found.title == "Ancient sync"
+        # The columns added since are present and empty, not missing.
+        assert (found.notes, found.template, found.emails, found.external_id) == ("", "", [], "")
+        store.set_notes("old-1", "still works")
+        refreshed = store.get_meeting("old-1")
+        assert refreshed is not None and refreshed.notes == "still works"
+    finally:
+        store.close()

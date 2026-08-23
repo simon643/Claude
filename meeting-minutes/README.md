@@ -12,6 +12,7 @@ pulls nothing.
 ```
 minutely demo                 # minute a bundled sample meeting, no setup at all
 minutely record               # open the recorder in your browser
+minutely notes --edit         # the notes you typed; the engines build on them
 minutely upcoming             # what's next on your calendar
 minutely teams pull           # pull Teams meeting transcripts and minute them
 minutely share --to sam@x.com # email the minutes
@@ -45,6 +46,64 @@ minutely record          # opens http://127.0.0.1:<port>/ in your browser
 Give the meeting a title, press **Start recording**, and the page streams audio
 to disk every five seconds. Press **Stop and save** and — if a whisper binary is
 installed — it transcribes and writes the minutes on its own.
+
+## Type notes; get minutes
+
+The best signal in any meeting is what the person in the room decided was worth
+writing down. So the recorder page is, first, a notepad — you jot as it happens,
+and afterwards the engine builds the minutes *around* your notes rather than
+instead of them.
+
+```
+Pricing                              →   your headings become the sections
+- 49 -> 65, bundle analytics         →   your points are kept, verbatim
+TODO: Sam: circulate the mechanics   →   your actions are actions, owned by Sam
+[ ] check the grandfather rule       →   and this one stays unassigned
+```
+
+Four conventions, all ones people already use without being asked:
+
+| You type | It becomes |
+|---|---|
+| a short line on its own | a section heading, filled in from the transcript |
+| `- something` | a point under that heading, kept word for word |
+| `TODO:` / `[ ]` / `x -> Name` | an action point |
+| `Name: do the thing` | an action owned by that person |
+
+Your notes are never rewritten and never dropped — they appear verbatim at the
+top of the minutes under **Your notes**. Everything else is built underneath
+them. Writing something down also promotes it: a commitment the engine was
+unsure about becomes a real action once you have independently noted it.
+
+Notes are saved as you type, so a crash costs nothing. From the terminal:
+
+```bash
+minutely notes                       # show them
+minutely notes --edit                # open them in $EDITOR
+minutely notes --file standup.md     # or bring them from a file
+```
+
+### Templates
+
+A stand-up and a client call want different documents. Templates set which
+sections appear, in what order, and what they are called:
+
+```bash
+minutely templates
+minutely minutes --template client
+```
+
+```
+default    General meeting    Summary, discussion, decisions, actions.
+standup    Stand-up           Short, per-person, blockers to the front.
+1-1        One-to-one         Discussion, agreements, follow-ups.
+client     Client call        What they asked for, what we committed to.
+```
+
+A client call's minutes say **Commitments** rather than "Action points" and
+**Agreed with the client** rather than "Decisions" — because those are the words
+that matter when the notes get quoted back at you. The picker sits under the
+notepad in the UI.
 
 ## What comes out
 
@@ -291,6 +350,8 @@ minutely config --engine claude      # or make it the default
 export ANTHROPIC_API_KEY=...
 ```
 
+Both engines take your typed notes as the spine of the document.
+
 **`rules`** matches the sentence shapes people actually use to commit to work —
 *"I'll do X"*, *"Sam, can you do X"*, *"we need X by Friday"* — attributes each
 one to a speaker, resolves spoken deadlines ("by next Tuesday", "end of the
@@ -304,6 +365,31 @@ parsed rather than scraped, and every action and decision must come back with a
 verbatim quote which is then resolved against the local transcript. A quote
 that matches nothing gets no citation, and the item is held back for review
 rather than published as fact.
+
+## The screen
+
+```
+┌──────────────┬────────────────────────────────────────────┐
+│ Up next      │  Weekly product sync                       │
+│  09:30 Sync ▸│  2026-08-24 · 42 min · Dana, Priya, Sam     │
+│  11:00 1:1  ▸│  ▶ ──────────────────────────── 42:00      │
+│              │                                            │
+│ Meetings     │  YOUR NOTES                                │
+│  Today       │  ┌──────────────────────────────────────┐  │
+│   Weekly ●   │  │ Pricing                              │  │
+│  Yesterday   │  │ - 49 -> 65, bundle analytics         │  │
+│   Design rev │  └──────────────────────────────────────┘  │
+│              │  [Enhance notes] [Stand-up ▾] [Copy]       │
+│ Teams        │                                            │
+│  [Pull]      │  SUMMARY / DISCUSSION / DECISIONS /        │
+│              │  ACTION POINTS / TRANSCRIPT / EMAIL        │
+└──────────────┴────────────────────────────────────────────┘
+```
+
+The rail on the left is the calendar on top and everything you have recorded
+underneath, grouped by day. The pane on the right is one document per meeting:
+the player, your notes, and the minutes built from them — with the transcript
+searchable in a panel at the bottom and the share box under that.
 
 ## Listening back
 
@@ -409,6 +495,8 @@ The page loads nothing from the network and is served under a
 | `minutely show [meeting]` | print the minutes already generated |
 | `minutely export [meeting]` | write them to a file (`--format md/html/txt/json`) |
 | `minutely list` | every meeting |
+| `minutely notes` | show or replace the notes you typed (`--set`, `--file`, `--edit`, `--clear`) |
+| `minutely templates` | the available minutes templates |
 | `minutely upcoming` | what is next on your calendar (`--hours`) |
 | `minutely share` | email the minutes (`--to`, `--note`, `--with-transcript`, `--dry-run`) |
 | `minutely actions` | the action register (`--status`, `--owner`, `--meeting`) |
@@ -441,7 +529,8 @@ Microsoft Graph ──teams/sync.py──────────────> t
 |---|---|
 | `pipeline.py` | the three verbs — import, transcribe, minute — shared by the CLI and the UI so they cannot drift |
 | `transcripts.py` | VTT / SRT / whisper JSON / plain text in, `Transcript` out |
-| `engines/rules.py` | the offline extraction: actions, owners, deadlines, decisions, topics |
+| `engines/rules.py` | the offline extraction: notes, actions, owners, deadlines, decisions, topics |
+| `templates.py` | which sections a stand-up, a one-to-one, or a client call gets |
 | `engines/claude.py` | the Anthropic engine, plus the quote-grounding that keeps it honest |
 | `teams/` | Microsoft 365 sign-in (`auth.py`), a small Graph client (`graph.py`), the calendar (`calendar.py`), and Teams-to-minutes (`sync.py`) |
 | `share.py` | composing the email, and sending it via Microsoft 365 or SMTP |
@@ -464,6 +553,14 @@ server over real requests, and the whole Teams path — device-code sign-in,
 token refresh, throttling, paging, transcript fallback, deduplication — against
 a fake Microsoft (`tests/fakes.py`).
 
+The browser UI has its own tests, which drive the real page in Chromium and
+skip themselves when Playwright is not installed:
+
+```bash
+pip install -e ".[dev,ui-tests]" && playwright install chromium
+pytest tests/test_ui_browser.py -q
+```
+
 ## Limitations
 
 - **No speaker diarisation in local recordings.** whisper transcribes words, not
@@ -478,6 +575,9 @@ a fake Microsoft (`tests/fakes.py`).
   badly. Use `--engine claude` for other languages.
 - **It is a draft.** Every renderer says so at the bottom. Read the minutes
   before you send them.
+- **The calendar is Microsoft 365 only.** `calendarView` expands recurring
+  meetings server-side, which is why it is the source; there is no Google
+  Calendar or `.ics` support yet.
 
 ## Licence
 

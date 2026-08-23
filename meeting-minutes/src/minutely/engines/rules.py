@@ -33,6 +33,7 @@ from ..models import (
     Transcript,
     format_duration,
 )
+from ..templates import DEFAULT, Template
 
 # --------------------------------------------------------------------------
 # Vocabulary
@@ -45,7 +46,10 @@ STOPWORDS = frozenset(
 # Words that start a sentence looking exactly like a name and are not one.
 # Without this, "Agreed, let's reprioritise" makes Agreed the owner.
 NOT_NAMES = frozenset(
-    ["agreed", "ok", "okay", "right", "yes", "yeah", "yep", "no", "nope", "sure", "thanks", "thank", "perfect", "great", "good", "morning", "afternoon", "evening", "hi", "hello", "hey", "sorry", "well", "actually", "anyway", "first", "second", "third", "next", "last", "finally", "correct", "exactly", "fine", "true", "false", "maybe", "honestly", "look", "listen", "so", "and", "but", "then", "also", "today", "tomorrow", "tonight", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    # Indefinite pronouns sit exactly where a name sits: "Someone should chase
+    # this" must not assign the work to a person called Someone.
+    ["someone", "somebody", "anyone", "anybody", "everyone", "everybody", "nobody",
+     "agreed", "ok", "okay", "right", "yes", "yeah", "yep", "no", "nope", "sure", "thanks", "thank", "perfect", "great", "good", "morning", "afternoon", "evening", "hi", "hello", "hey", "sorry", "well", "actually", "anyway", "first", "second", "third", "next", "last", "finally", "correct", "exactly", "fine", "true", "false", "maybe", "honestly", "look", "listen", "so", "and", "but", "then", "also", "today", "tomorrow", "tonight", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
 )
 
 # Terms that name a moment or a pleasantry rather than a subject, so they never
@@ -263,21 +267,30 @@ class RulesEngine:
         title: str = "",
         held_on: date | None = None,
         meeting_id: str = "",
+        notes: str = "",
+        template: Template | None = None,
     ) -> Minutes:
         reference = held_on or date.today()
+        chosen = template or DEFAULT
         units = _split_units(transcript)
         known = _known_names(transcript, units)
         canonical = _canonical_names(transcript)
+        jotted = parse_notes(notes)
+        # The first typed heading serves as the meeting's title only when there
+        # is no title already. When it does, it must not also appear as a topic;
+        # when it does not, dropping it would lose a whole agenda item.
+        note_title = "" if title else _note_title(jotted)
 
         actions, review, claimed = self._actions(units, known, canonical, reference)
+        actions, review = self._fold_in_notes(jotted, actions, review, units, canonical, reference)
         decisions = self._decisions(units)
-        topics = self._topics(units)
+        topics = self._topics(units, jotted, skip_first_heading=bool(note_title))
         questions = self._questions(units, claimed)
         attendees = transcript.speakers()
 
         return Minutes(
             meeting_id=meeting_id,
-            title=title or _derive_title(topics),
+            title=title or note_title or _derive_title(topics),
             held_on=reference.isoformat(),
             attendees=attendees,
             summary=_summary(transcript, attendees, topics, decisions, actions),
@@ -287,7 +300,82 @@ class RulesEngine:
             review=review,
             open_questions=questions,
             engine=self.name,
+            template=chosen.name,
+            notes=notes.strip(),
         )
+
+    # -- notes ------------------------------------------------------------
+
+    def _fold_in_notes(
+        self,
+        jotted: list[Note],
+        actions: list[ActionItem],
+        review: list[ActionItem],
+        units: list[Unit],
+        canonical: dict[str, str],
+        reference: date,
+    ) -> tuple[list[ActionItem], list[ActionItem]]:
+        """Merge what the note-taker wrote with what the engine found.
+
+        Two rules, both following from the same principle — a human wrote it
+        down on purpose, so it outranks a pattern match:
+
+        * A line the user marked as an action IS an action, even if nobody in
+          the transcript phrased it like one.
+        * A guess the engine was unsure about becomes a real action when the
+          user independently wrote the same thing down.
+        """
+        if not jotted:
+            return actions, review
+
+        promoted: list[ActionItem] = []
+        for item in review:
+            if any(_similar(item.text, note.text) for note in jotted):
+                item.confidence = LIKELY
+                promoted.append(item)
+        review = [item for item in review if item not in promoted]
+        actions = actions + promoted
+
+        for note in jotted:
+            if note.kind != "action":
+                continue
+            # The engine may already have found this commitment in the
+            # transcript. If so, the note refines it — usually by naming an
+            # owner nobody said aloud — rather than adding a second copy.
+            twin = next(
+                (
+                    candidate
+                    for candidate in actions
+                    if _similar(candidate.text, note.text) and not (candidate.owner and note.owner)
+                ),
+                None,
+            )
+            if twin is not None:
+                twin.owner = twin.owner or canonical.get(note.owner.lower(), note.owner)
+                twin.due = twin.due or _due_date(note.text, reference)
+                twin.confidence = CERTAIN
+                continue
+
+            support = _best_unit(note.text, units)
+            item = ActionItem(
+                text=_tidy(note.text).rstrip(" ."),
+                # Only an owner the note-taker actually wrote. Inferring one
+                # from whoever was speaking nearby would put a name against
+                # work that person never agreed to — the exact failure this
+                # engine exists to avoid.
+                owner=canonical.get(note.owner.lower(), note.owner),
+                due=_due_date(note.text, reference),
+                # Somebody typed this while the meeting was happening. There is
+                # no stronger evidence available.
+                confidence=CERTAIN,
+                segment_index=support.segment_index if support else None,
+                quote=note.text,
+            )
+            if item.text and all(item.key() != other.key() for other in actions):
+                actions.append(item)
+
+        actions.sort(key=lambda a: (a.segment_index if a.segment_index is not None else 10**6))
+        return actions, review
 
     # -- actions ----------------------------------------------------------
 
@@ -474,7 +562,22 @@ class RulesEngine:
 
     # -- topics -----------------------------------------------------------
 
-    def _topics(self, units: list[Unit]) -> list[Topic]:
+    def _topics(
+        self,
+        units: list[Unit],
+        jotted: list[Note] | None = None,
+        *,
+        skip_first_heading: bool = False,
+    ) -> list[Topic]:
+        written = jotted or []
+        headings = [note for note in written if note.kind == "heading"]
+        if skip_first_heading and headings and written and headings[0] is written[0]:
+            headings = headings[1:]
+        # The note-taker's own headings are a better outline than anything
+        # inferred from word frequency: they are what a person thought the
+        # meeting was about while sitting in it.
+        if len(headings) >= 2:
+            return self._topics_from_notes(headings, written, units)
         if not units:
             return []
         boundaries = _agenda_boundaries(units)
@@ -499,6 +602,182 @@ class RulesEngine:
                 )
             )
         return topics[: self.max_topics]
+
+    def _topics_from_notes(
+        self, headings: list[Note], jotted: list[Note], units: list[Unit]
+    ) -> list[Topic]:
+        """Use the typed headings as the outline, filled from the transcript."""
+        topics: list[Topic] = []
+        used: set[int] = set()
+        anchored: set[int] = set()
+        for heading in headings:
+            own = [note.text for note in jotted if note.parent is heading and note.kind == "point"]
+            supporting = _supporting_sentences(
+                heading.text, units, limit=3 - min(len(own), 2), used=used
+            )
+            # Two topics citing the same timestamp is a tell that the anchor is
+            # a sentence about the agenda rather than about the topic.
+            anchor = _best_unit(heading.text, units, avoid=anchored)
+            if anchor is not None:
+                anchored.add(anchor.position)
+            points = own[:2] + [text for text in supporting if not any(_similar(text, o) for o in own)]
+            topics.append(
+                Topic(
+                    title=_tidy(heading.text).rstrip(":"),
+                    points=points[:3],
+                    segment_index=anchor.segment_index if anchor else None,
+                )
+            )
+        return topics
+
+
+# --------------------------------------------------------------------------
+# Notes
+# --------------------------------------------------------------------------
+
+# What a jotted action looks like: a checkbox, a TODO marker, or an arrow.
+_NOTE_ACTION = re.compile(
+    r"^\s*(?:\[\s*[xX ]?\s*\]\s*|(?:todo|to-do|action(?:\s+item)?|ai|task)\s*[:\-]\s*)(?P<body>.+)$",
+    re.IGNORECASE,
+)
+_NOTE_ARROW = re.compile(r"^(?P<body>.+?)\s*(?:->|=>|\u2192)\s*(?P<tail>.+)$")
+# "Priya: chase the invoice" in a note assigns it, the same way it would aloud.
+_NOTE_OWNER = re.compile(r"^\s*(?P<owner>[A-Z][\w'\-]{1,20})\s*[:\-]\s*(?P<body>.+)$")
+_BULLET = re.compile(r"^\s*(?:[-*\u2022\u00b7+>]|\d+[.)])\s+")
+
+
+@dataclass
+class Note:
+    """One line the user typed, and what it appears to be."""
+
+    text: str
+    kind: str  # heading | point | action
+    owner: str = ""
+    indented: bool = False
+    parent: Note | None = None
+
+
+def parse_notes(raw: str) -> list[Note]:
+    """Read typed notes into headings, points, and actions.
+
+    The conventions recognised are the ones people already use without being
+    asked: a bullet is a point, an indent is a sub-point, ``TODO:`` or ``[ ]``
+    or an arrow is an action, and a short line with no bullet is a heading.
+    """
+    notes: list[Note] = []
+    current_heading: Note | None = None
+    for line in (raw or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indented = bool(re.match(r"^(?:\t|\s{2,})", line)) and bool(_BULLET.search(line))
+        body = _BULLET.sub("", stripped).strip()
+        if not body:
+            continue
+
+        kind = "point"
+        owner = ""
+        action = _NOTE_ACTION.match(body)
+        if action:
+            kind, body = "action", action.group("body").strip()
+        elif (arrow := _NOTE_ARROW.match(body)) is not None:
+            # "deck -> Sam" and "Sam -> send the deck" both happen; the side
+            # that looks like a name is the owner either way. When neither side
+            # is a name the arrow means something else entirely — "49 -> 65" is
+            # a price change, not an assignment — so it stays a plain point.
+            head, tail = arrow.group("body").strip(), arrow.group("tail").strip()
+            if _looks_like_name(tail):
+                kind, owner, body = "action", tail, head
+            elif _looks_like_name(head):
+                kind, owner, body = "action", head, tail
+        elif _BULLET.match(stripped) is None and len(body.split()) <= 8 and not body.endswith("."):
+            kind = "heading"
+
+        if kind != "heading":
+            named = _NOTE_OWNER.match(body)
+            if named and kind == "action" and not owner:
+                owner, body = named.group("owner"), named.group("body").strip()
+
+        note = Note(text=body, kind=kind, owner=owner.strip(), indented=indented)
+        if kind == "heading":
+            current_heading = note
+        else:
+            note.parent = current_heading
+        notes.append(note)
+    return notes
+
+
+def _looks_like_name(candidate: str) -> bool:
+    return bool(re.fullmatch(r"[A-Z][\w'\-]{1,20}", candidate.strip()))
+
+
+def _supporting_sentences(
+    seed: str, units: list[Unit], limit: int = 2, used: set[int] | None = None
+) -> list[str]:
+    """Transcript sentences that back up a note line.
+
+    ``used`` carries positions already spent on an earlier topic: one sentence
+    that mentions every agenda item would otherwise be quoted under all of them.
+    """
+    if limit <= 0:
+        return []
+    spent = used if used is not None else set()
+    wanted = set(_keywords(seed))
+    if not wanted:
+        return []
+    scored: list[tuple[float, int, str]] = []
+    for unit in units:
+        text = _tidy(_FILLER_PREFIX.sub("", unit.text))
+        words = text.split()
+        if len(words) < 6 or text.endswith("?"):
+            continue
+        overlap = wanted & set(_keywords(text))
+        if not overlap or unit.position in spent:
+            continue
+        scored.append((len(overlap) / len(wanted), unit.position, text))
+    scored.sort(key=lambda row: (-row[0], row[1]))
+
+    chosen: list[str] = []
+    for _score, position, text in scored:
+        if any(_similar(text, other) for other in chosen):
+            continue
+        chosen.append(text)
+        spent.add(position)
+        if len(chosen) == limit:
+            break
+    return chosen
+
+
+def _best_unit(seed: str, units: list[Unit], avoid: set[int] | None = None) -> Unit | None:
+    """The transcript sentence a note line most likely refers to."""
+    wanted = set(_keywords(seed))
+    if not wanted:
+        return None
+    skip = avoid or set()
+    best: tuple[float, Unit] | None = None
+    for unit in units:
+        if unit.position in skip:
+            continue
+        overlap = wanted & set(_keywords(unit.text))
+        if not overlap:
+            continue
+        score = len(overlap) / len(wanted)
+        if best is None or score > best[0]:
+            best = (score, unit)
+    return best[1] if best is not None and best[0] >= 0.4 else None
+
+
+def _note_title(jotted: list[Note]) -> str:
+    """A first line that reads like a document title is one.
+
+    Only when there are other headings under it. Notes that open straight into
+    the first agenda item are far more common than notes with a title line, and
+    stealing that first item to name the meeting loses a whole topic.
+    """
+    headings = [note for note in jotted if note.kind == "heading"]
+    if len(headings) >= 3 and jotted and jotted[0] is headings[0] and len(jotted[0].text.split()) >= 2:
+        return _tidy(jotted[0].text).rstrip(":")
+    return ""
 
 
 # --------------------------------------------------------------------------

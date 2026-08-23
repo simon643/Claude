@@ -9,7 +9,9 @@ Two implementations ship:
   for a materially better summary. Opt in per run with ``--engine claude``.
 
 Both satisfy :class:`MinutesEngine`, so ``minutely minutes`` does not care
-which one it is holding.
+which one it is holding. Both also take the notes the user typed during the
+meeting: those are the highest-signal text in the system, and an engine's job
+is to enhance them rather than to compete with them.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from datetime import date
 from typing import Protocol
 
 from ..models import Minutes, Transcript
+from ..templates import Template
 
 
 class EngineError(RuntimeError):
@@ -36,6 +39,8 @@ class MinutesEngine(Protocol):
         title: str = "",
         held_on: date | None = None,
         meeting_id: str = "",
+        notes: str = "",
+        template: Template | None = None,
     ) -> Minutes: ...
 
 

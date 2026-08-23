@@ -85,6 +85,14 @@ jobs:
           # what to do rather than stack-trace when nothing is configured.
           minutely teams status | grep -q 'application id'
           minutely teams --help > /dev/null
+          minutely templates | grep -q standup
+          # Typed notes are the spine of the document: prove they reach it.
+          minutely notes --set 'Pricing
+          TODO: Sam: circulate the credit mechanics' > /dev/null
+          minutely minutes --template client --format md > /tmp/client.md
+          grep -q '## Commitments' /tmp/client.md
+          grep -q 'circulate the credit mechanics' /tmp/client.md
+          minutely share --to nobody@example.com --dry-run | grep -q 'nothing was sent'
 
   no-real-recordings:
     if: >-

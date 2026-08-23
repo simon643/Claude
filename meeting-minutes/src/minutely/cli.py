@@ -35,6 +35,8 @@ from .teams.auth import DeviceCode
 from .teams.calendar import CalendarEvent, upcoming
 from .teams.factory import build_auth, build_client
 from .teams.sync import list_meetings, pull_recent
+from .templates import NAMES as TEMPLATE_NAMES
+from .templates import catalogue
 from .transcribers import TranscriptionError
 from .transcribers.factory import TRANSCRIBERS, get_transcriber
 
@@ -175,7 +177,7 @@ def cmd_minutes(args: argparse.Namespace) -> int:
         meeting = _target(store, args)
         if meeting is None:
             return 1
-        minutes = make_minutes(store, meeting, engine=args.engine)
+        minutes = make_minutes(store, meeting, engine=args.engine, template=args.template)
         transcript = store.get_transcript(meeting.meeting_id)
         if args.json:
             _emit(minutes.to_dict(), True)
@@ -186,6 +188,78 @@ def cmd_minutes(args: argparse.Namespace) -> int:
         return _fail(str(exc), args.json)
     finally:
         store.close()
+
+
+def cmd_notes(args: argparse.Namespace) -> int:
+    """Show or replace the notes typed during a meeting."""
+    store = Store()
+    try:
+        meeting = _target(store, args)
+        if meeting is None:
+            return 1
+
+        replacement: str | None = None
+        if args.clear:
+            replacement = ""
+        elif args.file:
+            path = Path(args.file).expanduser()
+            if not path.is_file():
+                return _fail(f"no such file: {path}", args.json)
+            replacement = path.read_text(encoding="utf-8")
+        elif args.set is not None:
+            replacement = args.set
+        elif args.edit:
+            edited = _edit_text(meeting.notes)
+            if edited is None:
+                return _fail("no editor available — set $EDITOR, or use --file", args.json)
+            replacement = edited
+
+        if replacement is not None:
+            store.set_notes(meeting.meeting_id, replacement)
+            meeting.notes = replacement
+
+        _emit({"meeting_id": meeting.meeting_id, "notes": meeting.notes}, args.json)
+        if not args.json:
+            if meeting.notes:
+                print(meeting.notes.rstrip())
+            else:
+                print("(no notes)")
+            if replacement is not None:
+                print()
+                print(f"saved — regenerate with: minutely minutes {meeting.meeting_id}")
+        return 0
+    finally:
+        store.close()
+
+
+def _edit_text(initial: str) -> str | None:
+    """Open $EDITOR on a temporary file, returning what came back."""
+    import os
+    import subprocess
+    import tempfile
+
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR")
+    if not editor:
+        return None
+    with tempfile.NamedTemporaryFile("w+", suffix=".md", delete=False, encoding="utf-8") as handle:
+        handle.write(initial)
+        path = Path(handle.name)
+    try:
+        subprocess.run([*editor.split(), str(path)], check=False)
+        return path.read_text(encoding="utf-8")
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def cmd_templates(args: argparse.Namespace) -> int:
+    rows = catalogue()
+    _emit(rows, args.json)
+    if not args.json:
+        for row in rows:
+            print(f"{row['name']:<10} {row['label']:<18} {row['description']}")
+        print()
+        print("use one with: minutely minutes --template standup")
+    return 0
 
 
 def cmd_show(args: argparse.Namespace) -> int:
@@ -724,8 +798,28 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("minutes", parents=[common], help="write minutes from a meeting's transcript")
     p.add_argument("meeting", nargs="?", default="")
     p.add_argument("--engine", choices=ENGINES, help="rules (offline, default) or claude")
+    p.add_argument(
+        "--template",
+        choices=TEMPLATE_NAMES,
+        help="shape of the document (see: minutely templates)",
+    )
     p.add_argument("--format", choices=render.FORMATS, default="txt")
     p.set_defaults(func=cmd_minutes)
+
+    p = sub.add_parser(
+        "notes",
+        parents=[common],
+        help="the notes you typed during a meeting (the engines build on these)",
+    )
+    p.add_argument("meeting", nargs="?", default="")
+    p.add_argument("--set", help="replace the notes with this text")
+    p.add_argument("--file", help="replace the notes with the contents of a file")
+    p.add_argument("--edit", action="store_true", help="open them in $EDITOR")
+    p.add_argument("--clear", action="store_true", help="delete them")
+    p.set_defaults(func=cmd_notes)
+
+    p = sub.add_parser("templates", parents=[common], help="list the minutes templates")
+    p.set_defaults(func=cmd_templates)
 
     p = sub.add_parser("show", parents=[common], help="print the minutes already generated")
     p.add_argument("meeting", nargs="?", default="")

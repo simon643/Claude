@@ -23,9 +23,9 @@ from typing import Any
 from .config import db_path, ensure_dirs
 from .models import ActionItem, Meeting, Minutes, Transcript
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
-_SCHEMA = """
+_TABLES = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 
 CREATE TABLE IF NOT EXISTS meetings (
@@ -40,12 +40,11 @@ CREATE TABLE IF NOT EXISTS meetings (
     status          TEXT NOT NULL DEFAULT 'new',
     source          TEXT NOT NULL DEFAULT 'local',
     external_id     TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    template        TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_meetings_held_on ON meetings(held_on);
-CREATE INDEX IF NOT EXISTS idx_meetings_external ON meetings(source, external_id);
 
 CREATE TABLE IF NOT EXISTS transcripts (
     meeting_id  TEXT PRIMARY KEY REFERENCES meetings(meeting_id) ON DELETE CASCADE,
@@ -61,8 +60,6 @@ CREATE TABLE IF NOT EXISTS minutes (
     payload     TEXT NOT NULL,
     created_at  TEXT NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_minutes_meeting ON minutes(meeting_id, id DESC);
 
 CREATE TABLE IF NOT EXISTS actions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +77,16 @@ CREATE TABLE IF NOT EXISTS actions (
     UNIQUE(meeting_id, dedupe_key)
 );
 
+"""
+
+
+# Indexes are created after any migration has run, because an index over a
+# column the migration is about to add cannot be created before it exists —
+# which is exactly what an upgrade from an older database looks like.
+_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_meetings_held_on ON meetings(held_on);
+CREATE INDEX IF NOT EXISTS idx_meetings_external ON meetings(source, external_id);
+CREATE INDEX IF NOT EXISTS idx_minutes_meeting ON minutes(meeting_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status);
 CREATE INDEX IF NOT EXISTS idx_actions_owner ON actions(owner);
 """
@@ -110,6 +117,11 @@ def _migrate(cur: sqlite3.Cursor, from_version: int) -> None:
         columns = {row["name"] for row in cur.execute("PRAGMA table_info(meetings)")}
         if "emails" not in columns:
             cur.execute("ALTER TABLE meetings ADD COLUMN emails TEXT NOT NULL DEFAULT '[]'")
+    if from_version < 4:
+        columns = {row["name"] for row in cur.execute("PRAGMA table_info(meetings)")}
+        for column in ("notes", "template"):
+            if column not in columns:
+                cur.execute(f"ALTER TABLE meetings ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
 
 
 class Store:
@@ -123,13 +135,14 @@ class Store:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
         with self._cursor() as cur:
-            cur.executescript(_SCHEMA)
+            cur.executescript(_TABLES)
             row = cur.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 cur.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
             elif int(row["version"]) < SCHEMA_VERSION:
                 _migrate(cur, int(row["version"]))
                 cur.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
+            cur.executescript(_INDEXES)
 
     # -- plumbing ---------------------------------------------------------
 
@@ -171,8 +184,9 @@ class Store:
                 """
                 INSERT INTO meetings (meeting_id, title, held_on, duration, audio_path,
                                       transcript_path, participants, emails, status,
-                                      source, external_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      source, external_id, notes, template,
+                                      created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(meeting_id) DO UPDATE SET
                     title = excluded.title,
                     held_on = excluded.held_on,
@@ -192,6 +206,12 @@ class Store:
                     external_id = CASE WHEN excluded.external_id = ''
                                        THEN meetings.external_id
                                        ELSE excluded.external_id END,
+                    -- Typed notes are the one thing here a person made by
+                    -- hand. A write that does not carry them must not clear
+                    -- them; `set_notes` is the only way to change them.
+                    notes = CASE WHEN excluded.notes = '' THEN meetings.notes
+                                 ELSE excluded.notes END,
+                    template = excluded.template,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -206,6 +226,8 @@ class Store:
                     meeting.status,
                     meeting.source,
                     meeting.external_id,
+                    meeting.notes,
+                    meeting.template,
                     meeting.created_at or _now(),
                     _now(),
                 ),
@@ -233,6 +255,20 @@ class Store:
                 (f"{needle}%", f"%{needle.lower()}%"),
             ).fetchall()
         return _meeting(rows[0]) if rows else None
+
+    def set_notes(self, meeting_id: str, notes: str) -> bool:
+        """Replace the typed notes, including with nothing.
+
+        Separate from ``upsert_meeting`` on purpose: that call refuses to clear
+        notes, because most writes know nothing about them. Deleting a note has
+        to be something the user asked for explicitly.
+        """
+        with self._cursor() as cur:
+            cur.execute(
+                "UPDATE meetings SET notes = ?, updated_at = ? WHERE meeting_id = ?",
+                (notes, _now(), meeting_id),
+            )
+            return cur.rowcount > 0
 
     def find_external(self, source: str, external_id: str) -> Meeting | None:
         """The meeting already imported for this external id, if any."""
@@ -442,6 +478,8 @@ def _meeting(row: sqlite3.Row) -> Meeting:
         status=row["status"],
         source=row["source"],
         external_id=row["external_id"],
+        notes=row["notes"],
+        template=row["template"],
         created_at=row["created_at"],
     )
 

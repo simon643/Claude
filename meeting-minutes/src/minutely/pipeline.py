@@ -27,6 +27,7 @@ from .engines import EngineError
 from .engines.factory import get_engine
 from .models import Meeting, Minutes, Transcript
 from .store import Store
+from .templates import get as get_template
 from .transcribers import TranscriptionError
 from .transcribers.factory import get_transcriber
 
@@ -156,9 +157,12 @@ def make_minutes(
     settings: Settings | None = None,
     *,
     engine: str | None = None,
+    template: str | None = None,
 ) -> Minutes:
     """Generate and persist minutes for a meeting that already has a transcript."""
     settings = settings or Settings.load()
+    if template is not None:
+        meeting.template = template
     transcript = store.get_transcript(meeting.meeting_id)
     if transcript is None:
         raise PipelineError(
@@ -174,6 +178,8 @@ def make_minutes(
         title=meeting.title,
         held_on=_as_date(meeting.held_on),
         meeting_id=meeting.meeting_id,
+        notes=meeting.notes,
+        template=get_template(meeting.template),
     )
     saved = store.save_minutes(minutes)
 
@@ -191,6 +197,7 @@ def process(
     settings: Settings | None = None,
     *,
     engine: str | None = None,
+    template: str | None = None,
 ) -> Minutes:
     """Transcribe if needed, then minute. What the UI calls when recording stops."""
     settings = settings or Settings.load()
@@ -199,7 +206,7 @@ def process(
         refreshed = store.get_meeting(meeting.meeting_id)
         if refreshed is not None:
             meeting = refreshed
-    return make_minutes(store, meeting, settings, engine=engine)
+    return make_minutes(store, meeting, settings, engine=engine, template=template)
 
 
 def _as_date(value: str) -> date | None:

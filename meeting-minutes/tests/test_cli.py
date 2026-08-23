@@ -369,3 +369,59 @@ def test_config_stores_smtp_settings(capsys: pytest.CaptureFixture[str]) -> None
 
     code, out, _ = run(["config"], capsys)
     assert "email       : smtp" in out
+
+
+# -- notes and templates ----------------------------------------------------
+
+
+def test_notes_can_be_set_shown_and_cleared(capsys: pytest.CaptureFixture[str]) -> None:
+    run(["demo"], capsys)
+    code, out, _ = run(["notes", "--set", "Pricing\n- 49 -> 65"], capsys)
+    assert code == 0
+    assert "49 -> 65" in out
+
+    code, out, _ = run(["notes"], capsys)
+    assert "Pricing" in out
+
+    code, out, _ = run(["notes", "--clear"], capsys)
+    assert "(no notes)" in out
+
+
+def test_notes_can_come_from_a_file(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    run(["demo"], capsys)
+    scratch = tmp_path / "notes.md"
+    scratch.write_text("Support backlog\nTODO: Marcus: draft the customer note", encoding="utf-8")
+    code, _out, _ = run(["notes", "--file", str(scratch)], capsys)
+    assert code == 0
+
+    code, out, _ = run(["minutes", "--json"], capsys)
+    minutes = json.loads(out)
+    assert minutes["notes"].startswith("Support backlog")
+    assert any(a["owner"] == "Marcus" and "draft" in a["text"].lower() for a in minutes["actions"])
+
+
+def test_a_missing_notes_file_is_reported(capsys: pytest.CaptureFixture[str]) -> None:
+    run(["demo"], capsys)
+    code, _out, err = run(["notes", "--file", "/nowhere/notes.md"], capsys)
+    assert code == 1
+    assert "no such file" in err
+
+
+def test_templates_are_listed(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _ = run(["templates"], capsys)
+    assert code == 0
+    assert "standup" in out and "Stand-up" in out
+
+
+def test_a_template_changes_the_document(capsys: pytest.CaptureFixture[str]) -> None:
+    run(["demo"], capsys)
+    code, out, _ = run(["minutes", "--template", "client", "--format", "md"], capsys)
+    assert code == 0
+    assert "## Commitments" in out
+    assert "## Action points" not in out
+
+    # And it sticks, so `show` renders the same document.
+    code, out, _ = run(["show", "--format", "md"], capsys)
+    assert "## Commitments" in out

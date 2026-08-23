@@ -598,3 +598,78 @@ def test_sharing_without_any_mail_transport_explains_the_options(client: Client)
     )
     assert status == 400
     assert "teams login --with-email" in payload["error"]
+
+
+# -- notes ------------------------------------------------------------------
+
+
+def test_notes_typed_in_the_browser_are_saved_as_they_go(client: Client) -> None:
+    _, started = client.post("/api/record/start", {"title": "Standup", "mime": "audio/webm"})
+    meeting_id = started["meeting"]["meeting_id"]
+
+    status, payload = client.post(
+        "/api/notes", {"meeting_id": meeting_id, "notes": "Pricing\n- 49 -> 65"}
+    )
+    assert status == 200
+    assert payload["characters"] == len("Pricing\n- 49 -> 65")
+
+    meeting = client.store.get_meeting(meeting_id)
+    assert meeting is not None and meeting.notes == "Pricing\n- 49 -> 65"
+
+    # Typing more replaces, and clearing is allowed.
+    client.post("/api/notes", {"meeting_id": meeting_id, "notes": ""})
+    meeting = client.store.get_meeting(meeting_id)
+    assert meeting is not None and meeting.notes == ""
+
+
+def test_notes_for_an_unknown_meeting_are_refused(client: Client) -> None:
+    status, payload = client.post("/api/notes", {"meeting_id": "nope", "notes": "x"})
+    assert status == 400
+    assert "unknown meeting" in payload["error"]
+
+
+def test_the_notes_reach_the_minutes(client: Client, demo_path: Path) -> None:
+    meeting, _ = pipeline.import_file(client.store, demo_path, title="Demo")
+    client.post(
+        "/api/notes",
+        {"meeting_id": meeting.meeting_id, "notes": "TODO: Priya: rebuild the index"},
+    )
+    client.post("/api/process", {"meeting_id": meeting.meeting_id, "engine": "rules"})
+    for _ in range(100):
+        _, job = client.get(f"/api/job?meeting={meeting.meeting_id}")
+        if job["state"] in {"done", "error"}:
+            break
+        time.sleep(0.1)
+    assert job["state"] == "done", job
+
+    _, payload = client.get(f"/api/meeting?id={meeting.meeting_id}")
+    assert payload["minutes"]["notes"] == "TODO: Priya: rebuild the index"
+    assert any(
+        a["text"] == "Rebuild the index" and a["owner"] == "Priya"
+        for a in payload["minutes"]["actions"]
+    )
+
+
+def test_the_template_can_be_chosen_and_is_remembered(client: Client, demo_path: Path) -> None:
+    meeting, _ = pipeline.import_file(client.store, demo_path)
+    status, payload = client.post(
+        "/api/meeting/update", {"meeting_id": meeting.meeting_id, "template": "standup"}
+    )
+    assert status == 200
+    assert payload["meeting"]["template"] == "standup"
+
+
+def test_an_unknown_template_is_refused(client: Client, demo_path: Path) -> None:
+    meeting, _ = pipeline.import_file(client.store, demo_path)
+    status, payload = client.post(
+        "/api/meeting/update", {"meeting_id": meeting.meeting_id, "template": "haiku"}
+    )
+    assert status == 400
+    assert "unknown template" in payload["error"]
+
+
+def test_the_page_is_told_which_templates_exist(client: Client) -> None:
+    _, payload = client.get("/api/state")
+    names = [row["name"] for row in payload["templates"]]
+    assert "default" in names and "standup" in names
+    assert all({"name", "label", "description"} <= set(row) for row in payload["templates"])

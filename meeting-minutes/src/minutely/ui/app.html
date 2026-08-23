@@ -10,170 +10,155 @@
   --bg: #f6f7f9; --panel: #ffffff; --ink: #16181d; --muted: #666d7d;
   --line: #e3e5ea; --accent: #2f6df6; --accent-ink: #fff;
   --rec: #d13438; --ok: #1a7f4b; --warn: #a4610f; --warn-bg: #fff7e6;
+  --note: #1a1c22;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #101216; --panel: #181b21; --ink: #e9ebef; --muted: #99a0ae;
-          --line: #282c35; --warn-bg: #2a2410; }
+          --line: #282c35; --warn-bg: #2a2410; --note: #e9ebef; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink);
-       font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-header { display: flex; align-items: baseline; gap: .75rem; padding: 1rem 1.5rem;
-         border-bottom: 1px solid var(--line); background: var(--panel); }
-header h1 { font-size: 1.05rem; margin: 0; letter-spacing: -0.01em; }
-header .sub { color: var(--muted); font-size: .85rem; }
-nav { margin-left: auto; display: flex; gap: .25rem; }
-nav button { background: none; border: 1px solid transparent; color: var(--muted);
-             padding: .35rem .7rem; border-radius: 7px; cursor: pointer; font-size: .9rem; }
-nav button.on { background: var(--bg); color: var(--ink); border-color: var(--line); }
-main { display: grid; grid-template-columns: 20rem 1fr; gap: 1.25rem; padding: 1.25rem 1.5rem;
-       align-items: start; max-width: 78rem; margin: 0 auto; }
-@media (max-width: 62rem) { main { grid-template-columns: 1fr; } }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; }
-.panel + .panel { margin-top: 1rem; }
-h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em;
-     color: var(--muted); margin: 0 0 .7rem; font-weight: 600; }
-h3 { font-size: 1rem; margin: 1.2rem 0 .35rem; }
-label { display: block; font-size: .8rem; color: var(--muted); margin: .6rem 0 .2rem; }
-input[type=text], select, textarea {
-  width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--bg); color: var(--ink); font: inherit; font-size: .92rem; }
+       font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; gap: .75rem; padding: .7rem 1.25rem;
+         border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 1rem; margin: 0; letter-spacing: -.01em; }
+header .sub { color: var(--muted); font-size: .82rem; }
+header .spacer { flex: 1; }
+main { display: grid; grid-template-columns: 19rem 1fr; min-height: calc(100vh - 3.2rem); }
+@media (max-width: 60rem) { main { grid-template-columns: 1fr; } aside { border-right: 0 !important; } }
+aside { border-right: 1px solid var(--line); background: var(--panel); padding: .9rem 0 2rem; overflow-y: auto; }
+article { padding: 1.5rem 2rem 5rem; max-width: 52rem; }
+h2.rail { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+          margin: 1rem 1.1rem .4rem; font-weight: 600; }
+h2.sec { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+         margin: 2rem 0 .5rem; font-weight: 600; }
+h3 { font-size: 1rem; margin: 1.1rem 0 .3rem; }
 button.primary { background: var(--accent); color: var(--accent-ink); border: none;
-  padding: .6rem 1rem; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; width: 100%; }
+  padding: .55rem 1rem; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; }
 button.primary.rec { background: var(--rec); }
 button.primary:disabled { opacity: .5; cursor: not-allowed; }
-button.ghost { background: none; border: 1px solid var(--line); color: var(--ink);
-  padding: .35rem .65rem; border-radius: 7px; font: inherit; font-size: .85rem; cursor: pointer; }
+button.ghost { background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  padding: .35rem .7rem; border-radius: 8px; font: inherit; font-size: .87rem; cursor: pointer; }
+button.ghost:hover { border-color: var(--muted); }
+button.link { background: none; border: 0; color: var(--accent); font: inherit; font-size: .85rem;
+  cursor: pointer; padding: 0; }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
-.check { display: flex; gap: .5rem; align-items: flex-start; font-size: .87rem; color: var(--muted); margin-top: .7rem; }
-.timer { font-variant-numeric: tabular-nums; font-size: 2rem; font-weight: 600; letter-spacing: -.02em; }
-.dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--rec); display: inline-block;
-       animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
-.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: .6rem; }
-.meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .1s linear; }
-ul.meetings { list-style: none; margin: 0; padding: 0; }
-ul.meetings li { padding: .5rem .55rem; border-radius: 8px; cursor: pointer; }
-ul.meetings li:hover { background: var(--bg); }
-ul.meetings li.on { background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
-ul.meetings .t { font-size: .92rem; }
-ul.meetings .d { font-size: .78rem; color: var(--muted); }
-table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+input[type=text], select, textarea {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: inherit; font-size: .93rem; }
+select { width: auto; }
+
+/* rail */
+.rail-item { display: block; width: 100%; text-align: left; background: none; border: 0;
+             padding: .45rem 1.1rem; cursor: pointer; color: inherit; font: inherit; }
+.rail-item:hover { background: var(--bg); }
+.rail-item.on { background: var(--bg); box-shadow: inset 3px 0 0 var(--accent); }
+.rail-item .t { font-size: .9rem; display: block; }
+.rail-item .d { font-size: .76rem; color: var(--muted); }
+.rail-agenda { display: flex; gap: .5rem; align-items: center; padding: .4rem 1.1rem; }
+.rail-agenda .when { font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--muted); min-width: 2.9rem; }
+.rail-agenda .what { flex: 1; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-agenda.soon .when { color: var(--rec); font-weight: 600; }
+.empty { color: var(--muted); font-size: .84rem; padding: 0 1.1rem; }
+
+/* document */
+.doc-title { font-size: 1.5rem; font-weight: 650; letter-spacing: -.02em; border: 0; background: none;
+             padding: 0; width: 100%; color: var(--ink); font-family: inherit; }
+.doc-title:focus { outline: none; }
+.meta { color: var(--muted); font-size: .85rem; margin: .15rem 0 1.1rem; }
+.notepad { width: 100%; min-height: 12rem; border: 1px solid var(--line); border-radius: 10px;
+           padding: .85rem 1rem; background: var(--panel); color: var(--note); resize: vertical;
+           font: 15px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.notepad:focus { outline: none; border-color: var(--accent); }
+.notepad.live { border-color: var(--rec); }
+.saved { font-size: .76rem; color: var(--muted); min-height: 1rem; }
+.enhanced { border-left: 2px solid var(--line); padding-left: 1rem; margin-top: .3rem; }
+.enhanced li, .enhanced p { color: var(--muted); }
+.enhanced strong { color: var(--ink); }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; }
 th, td { text-align: left; padding: .45rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 td.done { text-decoration: line-through; color: var(--muted); }
-.cite { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
-.pill { display: inline-block; font-size: .72rem; padding: .12rem .45rem; border-radius: 999px;
-        border: 1px solid var(--line); color: var(--muted); }
+.cite { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+button.seek { background: none; border: 0; padding: 0 .15rem; color: var(--accent); font: inherit;
+              font-size: .78rem; font-variant-numeric: tabular-nums; cursor: pointer; }
+button.seek:hover { text-decoration: underline; }
+audio { width: 100%; margin: .2rem 0 1rem; }
 .notice { background: var(--warn-bg); border: 1px solid var(--line); color: var(--warn);
-          border-radius: 9px; padding: .6rem .75rem; font-size: .85rem; }
-.err { color: var(--rec); font-size: .87rem; margin-top: .6rem; white-space: pre-wrap; }
+          border-radius: 9px; padding: .55rem .75rem; font-size: .85rem; }
+.err { color: var(--rec); font-size: .87rem; white-space: pre-wrap; }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
-ul.agenda { list-style: none; margin: 0; padding: 0; }
-ul.agenda li { display: flex; gap: .6rem; align-items: baseline; padding: .45rem .1rem;
-               border-bottom: 1px solid var(--line); }
-ul.agenda li:last-child { border-bottom: 0; }
-ul.agenda .when { font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--muted); min-width: 3.2rem; }
-ul.agenda .what { flex: 1; font-size: .92rem; }
-ul.agenda .sub { font-size: .78rem; color: var(--muted); }
-ul.agenda button { flex-shrink: 0; }
-audio { width: 100%; margin: .4rem 0 .2rem; }
-button.seek { background: none; border: 0; padding: 0 .15rem; color: var(--accent);
-              font: inherit; font-size: .8rem; font-variant-numeric: tabular-nums; cursor: pointer; }
-button.seek:hover { text-decoration: underline; }
-.share { border-top: 1px solid var(--line); margin-top: 1.4rem; padding-top: .9rem; }
-.share input[type=text] { margin-bottom: .4rem; }
-pre.md { white-space: pre-wrap; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-         background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: .8rem; max-height: 26rem; overflow: auto; }
+.dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--rec); display: inline-block;
+       animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
 .spin { display: inline-block; width: .8rem; height: .8rem; border: 2px solid var(--line);
-        border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+        border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
+        vertical-align: -1px; }
 @keyframes spin { to { transform: rotate(360deg) } }
+.timer { font-variant-numeric: tabular-nums; font-weight: 600; }
+.meter { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; width: 5rem; }
+.meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .1s linear; }
+details.transcript { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+details.transcript summary { cursor: pointer; font-size: .74rem; text-transform: uppercase;
+                             letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.tline { display: flex; gap: .6rem; padding: .18rem 0; font-size: .9rem; }
+.tline .who { color: var(--muted); min-width: 7rem; font-size: .84rem; }
+.tbody { max-height: 24rem; overflow-y: auto; margin-top: .6rem; }
+mark { background: #ffe98a; color: #16181d; }
 </style>
 </head>
 <body>
 <header>
   <h1>minutely</h1>
   <span class="sub" id="statusline">local recorder</span>
-  <nav>
-    <button id="tab-record" class="on">Record</button>
-    <button id="tab-actions">Action register</button>
-  </nav>
+  <span class="spacer"></span>
+  <span id="live-badge" class="hidden row" style="gap:.5rem">
+    <span class="dot"></span>
+    <span class="timer" id="timer">00:00</span>
+    <span class="meter"><i id="level"></i></span>
+    <button class="primary rec" id="stop">Stop</button>
+  </span>
+  <button class="primary" id="start">Record now</button>
 </header>
 
 <main>
-  <div>
-    <section class="panel hidden" id="upnext-panel">
-      <h2>Up next</h2>
-      <div id="upnext"></div>
-    </section>
+  <aside>
+    <div id="agenda-block" class="hidden">
+      <h2 class="rail">Up next</h2>
+      <div id="agenda"></div>
+    </div>
 
-    <section class="panel" id="recorder">
-      <h2>New recording</h2>
-      <div id="idle-form">
-        <label for="title">Meeting title</label>
-        <input type="text" id="title" placeholder="Weekly product sync" autocomplete="off">
-        <div class="check">
-          <input type="checkbox" id="withTab">
-          <label for="withTab" style="margin:0">Also capture the meeting tab's audio (for Zoom / Teams / Meet in a browser tab)</label>
-        </div>
-        <div class="check">
-          <input type="checkbox" id="autoProcess" checked>
-          <label for="autoProcess" style="margin:0">Transcribe and write minutes when I stop</label>
-        </div>
-        <p style="margin:.9rem 0 .6rem"><button class="primary" id="start">Start recording</button></p>
-        <p class="notice">Tell everyone in the room that you are recording. In many places recording
-        a conversation without the other party's consent is unlawful.</p>
-      </div>
-      <div id="live-form" class="hidden">
-        <div class="row" style="justify-content:space-between">
-          <span class="timer" id="timer">00:00</span>
-          <span class="muted"><span class="dot"></span> recording</span>
-        </div>
-        <div class="meter"><i id="level"></i></div>
-        <p class="muted" style="font-size:.82rem;margin:.6rem 0">Saved to disk continuously — a crash loses seconds, not the meeting.</p>
-        <button class="primary rec" id="stop">Stop and save</button>
-      </div>
-      <div class="err" id="rec-error"></div>
-    </section>
+    <h2 class="rail">Meetings</h2>
+    <div id="meeting-list"></div>
+    <p class="empty" id="no-meetings">Nothing recorded yet.</p>
 
-    <section class="panel" id="teams-panel">
-      <h2>Microsoft Teams</h2>
-      <div id="teams-body"><span class="spin"></span></div>
-    </section>
+    <div id="teams-block">
+      <h2 class="rail">Microsoft Teams</h2>
+      <div id="teams-body" style="padding: 0 1.1rem"><span class="spin"></span></div>
+    </div>
+  </aside>
 
-    <section class="panel">
-      <h2>Meetings</h2>
-      <ul class="meetings" id="meeting-list"></ul>
-      <p class="muted" id="no-meetings" style="font-size:.87rem">Nothing recorded yet.</p>
-    </section>
-  </div>
-
-  <div>
-    <section class="panel" id="detail">
-      <h2>Minutes</h2>
-      <p class="muted" id="detail-empty">Record a meeting, or pick one from the list.</p>
-      <div id="detail-body" class="hidden"></div>
-    </section>
-
-    <section class="panel hidden" id="actions-panel">
-      <h2>Action register — every meeting</h2>
-      <div class="row" style="margin-bottom:.6rem">
-        <select id="action-filter" style="width:auto">
-          <option value="open">Open</option>
-          <option value="done">Done</option>
-          <option value="all">All</option>
-        </select>
-      </div>
-      <div id="action-table"></div>
-    </section>
-  </div>
+  <article id="doc">
+    <p class="muted" id="doc-empty">
+      Pick a meeting, or press <strong>Record now</strong>. Type notes while it runs —
+      they become the spine of the minutes.
+    </p>
+    <div id="doc-body" class="hidden"></div>
+  </article>
 </main>
 
 <script>
 "use strict";
 const TOKEN = "__SESSION_TOKEN__";
 const $ = (id) => document.getElementById(id);
+
+const state = {
+  meetingId: null, recorder: null, tracks: [], audioCtx: null, startedAt: 0,
+  ticker: null, jobPoll: null, teamsPoll: null, agendaTimer: null,
+  notesTimer: null, notesDirty: false, player: null, segments: {},
+  templates: [], data: null, planned: null,
+};
 
 async function api(path, options) {
   const opts = Object.assign({ headers: {} }, options || {});
@@ -191,108 +176,87 @@ async function api(path, options) {
   return payload;
 }
 
-const state = { meetingId: null, recorder: null, stream: null, tracks: [], audioCtx: null,
-                startedAt: 0, ticker: null, poller: null, teamsPoll: null, tab: "record",
-                pendingEvent: null, player: null, segments: {} };
-
-// ---------------------------------------------------------------- recording
-
-async function startRecording() {
-  $("rec-error").textContent = "";
-  let mic;
-  try {
-    mic = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
-  } catch (err) {
-    $("rec-error").textContent = "Microphone unavailable: " + err.message +
-      "\nCheck the browser's site permissions for 127.0.0.1.";
-    return;
-  }
-  state.tracks = mic.getTracks();
-
-  let stream = mic;
-  if ($("withTab").checked) {
-    try {
-      // Merging the mic with the meeting tab is the only way to capture the
-      // people who are not in the room. Chrome offers tab audio here; Firefox
-      // and Safari generally do not, so this stays optional and non-fatal.
-      const display = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
-      const shared = display.getAudioTracks();
-      display.getVideoTracks().forEach((t) => t.stop());  // audio only; no screen is kept
-      if (shared.length === 0) {
-        display.getTracks().forEach((t) => t.stop());
-        $("rec-error").textContent = "That share had no audio — recording the microphone only. " +
-          "Pick a tab and tick 'Share tab audio'.";
-      } else {
-        state.tracks = state.tracks.concat(display.getTracks());
-        const ctx = new AudioContext();
-        const mixer = ctx.createMediaStreamDestination();
-        ctx.createMediaStreamSource(mic).connect(mixer);
-        ctx.createMediaStreamSource(new MediaStream(shared)).connect(mixer);
-        state.audioCtx = ctx;
-        stream = mixer.stream;
-      }
-    } catch (err) {
-      $("rec-error").textContent = "Tab audio not captured (" + err.message + "). Recording the microphone only.";
-    }
-  }
-
-  const mime = pickMime();
-  let recorder;
-  try {
-    recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-  } catch (err) {
-    stopTracks();
-    $("rec-error").textContent = "This browser cannot record audio: " + err.message;
-    return;
-  }
-
-  const planned = state.pendingEvent || {};
-  let started;
-  try {
-    started = await api("/api/record/start", {
-      json: {
-        title: $("title").value,
-        mime: recorder.mimeType || mime,
-        event_id: planned.event_id || "",
-        attendees: planned.attendees || [],
-        emails: planned.emails || [],
-      },
-    });
-  } catch (err) {
-    stopTracks();
-    $("rec-error").textContent = "Could not start: " + err.message;
-    return;
-  }
-
-  state.meetingId = started.meeting.meeting_id;
-  state.recorder = recorder;
-  state.stream = stream;
-  state.startedAt = Date.now();
-
-  recorder.ondataavailable = async (event) => {
-    if (!event.data || event.data.size === 0) return;
-    try {
-      await fetch("/api/record/chunk?meeting=" + encodeURIComponent(state.meetingId), {
-        method: "POST",
-        headers: { "X-Session-Token": TOKEN, "Content-Type": "application/octet-stream" },
-        body: event.data,
-      });
-    } catch (err) {
-      $("rec-error").textContent = "A chunk failed to save: " + err.message;
-    }
-  };
-  // Five-second slices: frequent enough that a crash costs almost nothing,
-  // rare enough that the request rate stays trivial.
-  recorder.start(5000);
-
-  meter(stream);
-  $("idle-form").classList.add("hidden");
-  $("live-form").classList.remove("hidden");
-  state.ticker = setInterval(tick, 250);
-  tick();
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
 }
+
+function clock(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  const mm = String(Math.floor(total / 60) % 60).padStart(2, "0");
+  const ss = String(total % 60).padStart(2, "0");
+  const hh = Math.floor(total / 3600);
+  return hh > 0 ? hh + ":" + mm + ":" + ss : mm + ":" + ss;
+}
+
+// ------------------------------------------------------------------- rail
+
+function dayLabel(iso) {
+  if (!iso) return "Undated";
+  const when = new Date(iso + "T00:00:00");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((today - when) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) return when.toLocaleDateString([], { weekday: "long" });
+  return when.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+async function refreshMeetings() {
+  const data = await api("/api/meetings");
+  const host = $("meeting-list");
+  host.innerHTML = "";
+  $("no-meetings").classList.toggle("hidden", data.meetings.length > 0);
+
+  let currentDay = null;
+  for (const meeting of data.meetings) {
+    const day = dayLabel((meeting.held_on || meeting.created_at || "").slice(0, 10));
+    if (day !== currentDay) {
+      currentDay = day;
+      host.append(el("h2", "rail", day));
+    }
+    const row = el("button", "rail-item" + (meeting.meeting_id === state.meetingId ? " on" : ""));
+    row.append(el("span", "t", meeting.title || "Untitled meeting"));
+    const bits = [];
+    if (meeting.duration) bits.push(Math.max(1, Math.round(meeting.duration / 60)) + " min");
+    bits.push(meeting.status === "minuted" ? "minuted" : meeting.status);
+    if (meeting.source === "teams") bits.push("Teams");
+    row.append(el("span", "d", bits.join(" · ")));
+    row.onclick = () => openMeeting(meeting.meeting_id);
+    host.append(row);
+  }
+}
+
+async function refreshAgenda() {
+  let info;
+  try { info = await api("/api/calendar/upcoming"); }
+  catch (err) { $("agenda-block").classList.add("hidden"); return; }
+  const host = $("agenda");
+  if (!info.signed_in || !info.events.length) {
+    $("agenda-block").classList.add("hidden");
+    return;
+  }
+  $("agenda-block").classList.remove("hidden");
+  host.innerHTML = "";
+  for (const event of info.events) {
+    const row = el("div", "rail-agenda" + (event.starts_in <= 5 ? " soon" : ""));
+    row.append(el("span", "when", new Date(event.start)
+      .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+    const what = el("div", "what", event.title);
+    what.title = event.title + (event.attendees.length ? " — " + event.attendees.join(", ") : "");
+    row.append(what);
+    const button = el("button", "ghost", event.recorded_as ? "Open" : "Record");
+    button.onclick = event.recorded_as
+      ? () => openMeeting(event.recorded_as)
+      : () => startRecording(event);
+    row.append(button);
+    host.append(row);
+  }
+}
+
+// -------------------------------------------------------------- recording
 
 function pickMime() {
   const options = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
@@ -302,12 +266,100 @@ function pickMime() {
   return "";
 }
 
+async function startRecording(event) {
+  if (state.recorder) return;
+  state.planned = event || null;
+  let mic;
+  try {
+    mic = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (err) {
+    showDocError("Microphone unavailable: " + err.message +
+      "\nCheck the browser's site permissions for 127.0.0.1.");
+    return;
+  }
+  state.tracks = mic.getTracks();
+  let stream = mic;
+
+  if (event && event.online) {
+    try {
+      // Merging the mic with the meeting tab is the only way to capture the
+      // people who are not in the room. Chrome offers tab audio; most others
+      // do not, so this stays optional and non-fatal.
+      const display = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+      const shared = display.getAudioTracks();
+      display.getVideoTracks().forEach((t) => t.stop());
+      if (shared.length === 0) {
+        display.getTracks().forEach((t) => t.stop());
+      } else {
+        state.tracks = state.tracks.concat(display.getTracks());
+        const ctx = new AudioContext();
+        const mixer = ctx.createMediaStreamDestination();
+        ctx.createMediaStreamSource(mic).connect(mixer);
+        ctx.createMediaStreamSource(new MediaStream(shared)).connect(mixer);
+        state.audioCtx = ctx;
+        stream = mixer.stream;
+      }
+    } catch (err) { /* microphone only, which is still a recording */ }
+  }
+
+  const mime = pickMime();
+  let recorder;
+  try {
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  } catch (err) {
+    stopTracks();
+    showDocError("This browser cannot record audio: " + err.message);
+    return;
+  }
+
+  let started;
+  try {
+    started = await api("/api/record/start", {
+      json: {
+        title: event ? event.title : "",
+        mime: recorder.mimeType || mime,
+        event_id: event ? event.event_id : "",
+        attendees: event ? event.attendees : [],
+        emails: event ? event.emails : [],
+      },
+    });
+  } catch (err) {
+    stopTracks();
+    showDocError("Could not start: " + err.message);
+    return;
+  }
+
+  state.recorder = recorder;
+  state.startedAt = Date.now();
+  recorder.ondataavailable = async (chunk) => {
+    if (!chunk.data || chunk.data.size === 0) return;
+    try {
+      await fetch("/api/record/chunk?meeting=" + encodeURIComponent(started.meeting.meeting_id), {
+        method: "POST",
+        headers: { "X-Session-Token": TOKEN, "Content-Type": "application/octet-stream" },
+        body: chunk.data,
+      });
+    } catch (err) { showDocError("A chunk failed to save: " + err.message); }
+  };
+  // Five-second slices: a crash costs seconds, not the meeting.
+  recorder.start(5000);
+  meter(stream);
+
+  $("live-badge").classList.remove("hidden");
+  $("start").classList.add("hidden");
+  state.ticker = setInterval(tick, 250);
+  tick();
+
+  await refreshMeetings();
+  await openMeeting(started.meeting.meeting_id);
+  const pad = $("notepad");
+  if (pad) pad.focus();
+}
+
 function tick() {
-  const secs = Math.floor((Date.now() - state.startedAt) / 1000);
-  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
-  const ss = String(secs % 60).padStart(2, "0");
-  const hh = Math.floor(secs / 3600);
-  $("timer").textContent = hh > 0 ? hh + ":" + mm.slice(-2) + ":" + ss : mm + ":" + ss;
+  $("timer").textContent = clock((Date.now() - state.startedAt) / 1000);
 }
 
 function meter(stream) {
@@ -334,40 +386,31 @@ async function stopRecording() {
   if (!recorder) return;
   $("stop").disabled = true;
   const duration = (Date.now() - state.startedAt) / 1000;
+  const meetingId = state.meetingId;
 
-  await new Promise((resolve) => {
-    recorder.onstop = resolve;
-    recorder.stop();
-  });
-  // The final ondataavailable is dispatched asynchronously; give it a moment
-  // to reach the server before we ask the server how big the file is.
+  await flushNotes();
+  await new Promise((resolve) => { recorder.onstop = resolve; recorder.stop(); });
+  // The final ondataavailable is dispatched asynchronously; let it land before
+  // asking the server how big the file is.
   await new Promise((resolve) => setTimeout(resolve, 400));
   stopTracks();
 
   state.recorder = null;
   clearInterval(state.ticker);
-  $("live-form").classList.add("hidden");
-  $("idle-form").classList.remove("hidden");
+  $("live-badge").classList.add("hidden");
+  $("start").classList.remove("hidden");
   $("stop").disabled = false;
   $("level").style.width = "0";
 
   try {
     await api("/api/record/stop", {
-      json: {
-        meeting_id: state.meetingId,
-        title: $("title").value,
-        duration: duration,
-        process: $("autoProcess").checked,
-      },
+      json: { meeting_id: meetingId, duration: duration, process: true },
     });
-  } catch (err) {
-    $("rec-error").textContent = err.message;
-  }
-  $("title").value = "";
-  state.pendingEvent = null;
+  } catch (err) { showDocError(err.message); }
+  state.planned = null;
   await refreshMeetings();
-  await refreshUpNext();
-  await openMeeting(state.meetingId);
+  await refreshAgenda();
+  await openMeeting(meetingId);
 }
 
 function stopTracks() {
@@ -376,75 +419,64 @@ function stopTracks() {
   if (state.audioCtx) { state.audioCtx.close(); state.audioCtx = null; }
 }
 
-// ------------------------------------------------------------------- views
-
-async function refreshMeetings() {
-  const data = await api("/api/meetings");
-  const list = $("meeting-list");
-  list.innerHTML = "";
-  $("no-meetings").classList.toggle("hidden", data.meetings.length > 0);
-  for (const meeting of data.meetings) {
-    const li = document.createElement("li");
-    li.className = meeting.meeting_id === state.meetingId ? "on" : "";
-    const title = document.createElement("div");
-    title.className = "t";
-    title.textContent = meeting.title || "Untitled meeting";
-    const sub = document.createElement("div");
-    sub.className = "d";
-    sub.textContent = (meeting.held_on || "") + " · " + meeting.status;
-    li.append(title, sub);
-    li.onclick = () => openMeeting(meeting.meeting_id);
-    list.append(li);
-  }
-}
+// --------------------------------------------------------------- document
 
 async function openMeeting(meetingId) {
   if (!meetingId) return;
+  if (state.meetingId && state.meetingId !== meetingId) await flushNotes();
   state.meetingId = meetingId;
-  showTab("record");
   const data = await api("/api/meeting?id=" + encodeURIComponent(meetingId));
-  renderMeeting(data);
+  state.data = data;
+  renderDocument(data);
   await refreshMeetings();
 
-  clearInterval(state.poller);
+  clearInterval(state.jobPoll);
   if (data.job && data.job.state === "running") {
-    state.poller = setInterval(async () => {
+    state.jobPoll = setInterval(async () => {
       const job = await api("/api/job?meeting=" + encodeURIComponent(meetingId));
       if (job.state === "running") {
-        $("job-line").innerHTML = '<span class="spin"></span> ' + escapeHtml(job.message || "working");
+        const line = $("job-line");
+        if (line) line.innerHTML = '<span class="spin"></span> ' + escapeHtml(job.message || "working");
         return;
       }
-      clearInterval(state.poller);
+      clearInterval(state.jobPoll);
       openMeeting(meetingId);
     }, 2000);
   }
 }
 
-function renderMeeting(data) {
+function renderDocument(data) {
   const meeting = data.meeting;
   const minutes = data.minutes;
-  const body = $("detail-body");
-  $("detail-empty").classList.add("hidden");
+  const body = $("doc-body");
+  $("doc-empty").classList.add("hidden");
   body.classList.remove("hidden");
   body.innerHTML = "";
 
-  const head = document.createElement("div");
-  head.innerHTML =
-    "<h3 style='margin-top:0'>" + escapeHtml(meeting.title || "Untitled meeting") + "</h3>" +
-    "<p class='muted' style='font-size:.85rem;margin:.1rem 0 .8rem'>" +
-    escapeHtml(meeting.held_on || "") + " · " + escapeHtml(meeting.status) +
-    (meeting.duration ? " · " + Math.round(meeting.duration / 60) + " min" : "") + "</p>";
-  body.append(head);
-
-  // A saved recording is playable from here, and every citation in the
-  // minutes below seeks this player.
-  state.player = null;
   state.segments = {};
+  state.player = null;
   if (data.transcript) {
     for (const segment of data.transcript.segments) state.segments[segment.index] = segment.start;
   }
+
+  // Title, editable in place.
+  const title = el("input", "doc-title");
+  title.type = "text";
+  title.value = meeting.title || "";
+  title.placeholder = "Untitled meeting";
+  title.onchange = async () => {
+    await api("/api/meeting/update", { json: { meeting_id: meeting.meeting_id, title: title.value } });
+    refreshMeetings();
+  };
+  body.append(title);
+
+  const bits = [meeting.held_on || ""];
+  if (meeting.duration) bits.push(Math.max(1, Math.round(meeting.duration / 60)) + " min");
+  if (meeting.participants.length) bits.push(meeting.participants.join(", "));
+  body.append(el("p", "meta", bits.filter(Boolean).join(" · ")));
+
   if (meeting.audio_path) {
-    const player = document.createElement("audio");
+    const player = el("audio");
     player.controls = true;
     player.preload = "none";
     player.src = "/api/audio?id=" + encodeURIComponent(meeting.meeting_id) +
@@ -453,10 +485,73 @@ function renderMeeting(data) {
     state.player = player;
   }
 
-  const job = document.createElement("p");
+  // The notepad. This is the point of the whole screen while a meeting runs.
+  const recording = state.recorder && state.meetingId === meeting.meeting_id;
+  body.append(el("h2", "sec", recording ? "Your notes — typing now" : "Your notes"));
+  const pad = el("textarea", "notepad" + (recording ? " live" : ""));
+  pad.id = "notepad";
+  pad.value = meeting.notes || "";
+  pad.placeholder =
+    "Jot as it happens. Headings become sections; \"TODO:\" or \"[ ]\" or \"->\" become actions.\n\n" +
+    "Pricing\n- 49 -> 65, bundle analytics\nTODO: Sam: circulate the credit mechanics";
+  pad.oninput = () => {
+    state.notesDirty = true;
+    $("saved-line").textContent = "unsaved";
+    clearTimeout(state.notesTimer);
+    state.notesTimer = setTimeout(flushNotes, 700);
+  };
+  pad.onblur = flushNotes;
+  body.append(pad);
+  const saved = el("p", "saved", "");
+  saved.id = "saved-line";
+  body.append(saved);
+
+  const controls = el("div", "row");
+  controls.style.margin = ".6rem 0 0";
+  const enhance = el("button", "primary", minutes ? "Re-enhance notes" : "Enhance notes");
+  enhance.onclick = async () => {
+    enhance.disabled = true;
+    await flushNotes();
+    try {
+      await api("/api/process", {
+        json: { meeting_id: meeting.meeting_id, template: picker.value },
+      });
+      await openMeeting(meeting.meeting_id);
+    } catch (err) { showDocError(err.message); enhance.disabled = false; }
+  };
+  controls.append(enhance);
+
+  const picker = el("select");
+  for (const template of state.templates) {
+    const option = el("option", null, template.label);
+    option.value = template.name;
+    option.title = template.description;
+    if ((meeting.template || "default") === template.name) option.selected = true;
+    picker.append(option);
+  }
+  picker.onchange = () =>
+    api("/api/meeting/update", { json: { meeting_id: meeting.meeting_id, template: picker.value } });
+  controls.append(picker);
+
+  if (minutes) {
+    const copy = el("button", "ghost", "Copy markdown");
+    copy.onclick = async () => {
+      try { await navigator.clipboard.writeText(data.markdown); copy.textContent = "Copied"; }
+      catch (err) { copy.textContent = "Copy failed"; }
+      setTimeout(() => { copy.textContent = "Copy markdown"; }, 2000);
+    };
+    const print = el("button", "ghost", "Printable page");
+    print.onclick = () => window.open(
+      "/api/export?id=" + encodeURIComponent(meeting.meeting_id) + "&fmt=html&token=" +
+      encodeURIComponent(TOKEN), "_blank", "noopener");
+    controls.append(copy, print);
+  }
+  body.append(controls);
+
+  const job = el("p", "muted");
   job.id = "job-line";
-  job.className = "muted";
   job.style.fontSize = ".87rem";
+  job.style.marginTop = ".8rem";
   if (data.job && data.job.state === "running") {
     job.innerHTML = '<span class="spin"></span> ' + escapeHtml(data.job.message || "working");
   } else if (data.job && data.job.state === "error") {
@@ -465,121 +560,75 @@ function renderMeeting(data) {
   }
   body.append(job);
 
-  const controls = document.createElement("div");
-  controls.className = "row";
-  controls.style.margin = ".4rem 0 1rem";
-  const regen = document.createElement("button");
-  regen.className = "ghost";
-  regen.textContent = minutes ? "Regenerate minutes" : "Transcribe and write minutes";
-  regen.onclick = async () => {
-    regen.disabled = true;
-    try {
-      await api("/api/process", { json: { meeting_id: meeting.meeting_id } });
-      await openMeeting(meeting.meeting_id);
-    } catch (err) { job.className = "err"; job.textContent = err.message; }
-    regen.disabled = false;
-  };
-  controls.append(regen);
+  if (minutes) renderMinutes(body, meeting, minutes);
+  if (data.transcript) body.append(transcriptPanel(data.transcript));
+  if (minutes) body.append(shareBox(meeting));
+}
 
-  if (minutes) {
-    const copy = document.createElement("button");
-    copy.className = "ghost";
-    copy.textContent = "Copy markdown";
-    copy.onclick = async () => {
-      try { await navigator.clipboard.writeText(data.markdown); copy.textContent = "Copied"; }
-      catch (err) { copy.textContent = "Copy failed — select the text below"; }
-      setTimeout(() => { copy.textContent = "Copy markdown"; }, 2000);
-    };
-    const open = document.createElement("button");
-    open.className = "ghost";
-    open.textContent = "Printable page";
-    open.onclick = () => window.open(
-      "/api/export?id=" + encodeURIComponent(meeting.meeting_id) + "&fmt=html&token=" + encodeURIComponent(TOKEN),
-      "_blank", "noopener");
-    controls.append(copy, open);
+function renderMinutes(body, meeting, minutes) {
+  const enhanced = el("div", "enhanced");
+
+  if (minutes.summary) {
+    enhanced.append(el("h2", "sec", "Summary"));
+    enhanced.append(el("p", null, minutes.summary));
   }
-  body.append(controls);
-
-  if (!minutes) {
-    const hint = document.createElement("p");
-    hint.className = "muted";
-    hint.style.fontSize = ".9rem";
-    hint.textContent = "No minutes yet.";
-    body.append(hint);
-    return;
-  }
-
-  body.append(section("Summary", para(minutes.summary)));
 
   if (minutes.topics.length) {
-    const wrap = document.createElement("div");
+    enhanced.append(el("h2", "sec", "Discussion"));
     for (const topic of minutes.topics) {
-      const h = document.createElement("h3");
-      h.textContent = topic.title;
-      h.append(cite(topic.segment_index));
-      const ul = document.createElement("ul");
-      for (const point of topic.points) {
-        const li = document.createElement("li");
-        li.textContent = point;
-        ul.append(li);
-      }
-      wrap.append(h, ul);
+      const heading = el("h3", null, topic.title);
+      heading.append(cite(topic.segment_index));
+      enhanced.append(heading);
+      const list = el("ul");
+      for (const point of topic.points) list.append(el("li", null, point));
+      enhanced.append(list);
     }
-    body.append(section("Discussion", wrap));
   }
 
   if (minutes.decisions.length) {
-    const ol = document.createElement("ol");
+    enhanced.append(el("h2", "sec", "Decisions"));
+    const list = el("ol");
     for (const decision of minutes.decisions) {
-      const li = document.createElement("li");
-      li.textContent = decision.text;
-      li.append(cite(decision.segment_index));
-      ol.append(li);
+      const item = el("li", null, decision.text);
+      item.append(cite(decision.segment_index));
+      list.append(item);
     }
-    body.append(section("Decisions", ol));
+    enhanced.append(list);
   }
 
-  body.append(section("Action points", actionTable(minutes.actions, () => openMeeting(meeting.meeting_id))));
-  body.append(shareBox(meeting, data));
+  enhanced.append(el("h2", "sec", "Action points"));
+  enhanced.append(actionTable(minutes.actions, () => openMeeting(meeting.meeting_id)));
 
   if (minutes.open_questions.length) {
-    const ul = document.createElement("ul");
-    for (const question of minutes.open_questions) {
-      const li = document.createElement("li");
-      li.textContent = question;
-      ul.append(li);
-    }
-    body.append(section("Open questions", ul));
+    enhanced.append(el("h2", "sec", "Open questions"));
+    const list = el("ul");
+    for (const question of minutes.open_questions) list.append(el("li", null, question));
+    enhanced.append(list);
   }
 
   if (minutes.review.length) {
-    const ul = document.createElement("ul");
+    enhanced.append(el("h2", "sec", "Possible actions"));
+    const note = el("div", "notice");
+    note.append(document.createTextNode(
+      "Detected but not confidently a commitment — confirm before circulating."));
+    const list = el("ul");
     for (const item of minutes.review) {
-      const li = document.createElement("li");
-      li.textContent = item.text + (item.owner ? " — " + item.owner : "");
-      ul.append(li);
+      list.append(el("li", null, item.text + (item.owner ? " — " + item.owner : "")));
     }
-    const note = document.createElement("div");
-    note.className = "notice";
-    note.append(document.createTextNode("Detected but not confidently a commitment — confirm before circulating."));
-    note.append(ul);
-    body.append(section("Possible actions", note));
+    note.append(list);
+    enhanced.append(note);
   }
-
-  const md = document.createElement("pre");
-  md.className = "md";
-  md.textContent = data.markdown;
-  body.append(section("Markdown", md));
+  body.append(enhanced);
 }
 
 function actionTable(actions, onChange) {
-  if (!actions.length) return para("None recorded.");
-  const table = document.createElement("table");
+  if (!actions.length) return el("p", "muted", "None recorded.");
+  const table = el("table");
   table.innerHTML = "<thead><tr><th></th><th>Action</th><th>Owner</th><th>Due</th></tr></thead>";
-  const tbody = document.createElement("tbody");
+  const tbody = el("tbody");
   for (const item of actions) {
-    const tr = document.createElement("tr");
-    const box = document.createElement("input");
+    const row = el("tr");
+    const box = el("input");
     box.type = "checkbox";
     box.checked = item.status === "done";
     box.onchange = async () => {
@@ -589,19 +638,13 @@ function actionTable(actions, onChange) {
         if (onChange) onChange();
       } finally { box.disabled = false; }
     };
-    const tick = document.createElement("td");
-    tick.append(box);
-    const text = document.createElement("td");
-    text.textContent = item.text;
+    const tick = el("td"); tick.append(box);
+    const text = el("td", item.status === "done" ? "done" : null, item.text);
     text.append(cite(item.segment_index));
-    if (item.status === "done") text.className = "done";
-    const owner = document.createElement("td");
-    owner.textContent = item.owner || "—";
-    if (!item.owner) owner.className = "muted";
-    const due = document.createElement("td");
-    due.textContent = item.due || "—";
-    tr.append(tick, text, owner, due);
-    tbody.append(tr);
+    const owner = el("td", item.owner ? null : "muted", item.owner || "—");
+    const due = el("td", null, item.due || "—");
+    row.append(tick, text, owner, due);
+    tbody.append(row);
   }
   table.append(tbody);
   return table;
@@ -613,16 +656,9 @@ function cite(segmentIndex) {
     return document.createTextNode("");
   }
   const label = clock(start);
-  if (!state.player) {
-    const plain = document.createElement("span");
-    plain.className = "cite";
-    plain.textContent = " [" + label + "]";
-    return plain;
-  }
-  const button = document.createElement("button");
-  button.className = "seek";
+  if (!state.player) return el("span", "cite", " [" + label + "]");
+  const button = el("button", "seek", "[" + label + "]");
   button.type = "button";
-  button.textContent = "[" + label + "]";
   button.title = "Play from " + label;
   button.onclick = () => {
     // A couple of seconds of run-up: the sentence usually starts before the
@@ -633,45 +669,74 @@ function cite(segmentIndex) {
   return button;
 }
 
-function clock(seconds) {
-  const total = Math.max(0, Math.round(seconds));
-  const mm = String(Math.floor(total / 60) % 60).padStart(2, "0");
-  const ss = String(total % 60).padStart(2, "0");
-  const hh = Math.floor(total / 3600);
-  return hh > 0 ? hh + ":" + mm + ":" + ss : mm + ":" + ss;
+function transcriptPanel(transcript) {
+  const wrap = el("details", "transcript");
+  wrap.append(el("summary", null, "Transcript (" + transcript.segments.length + " lines)"));
+
+  const search = el("input");
+  search.type = "text";
+  search.placeholder = "Search the transcript";
+  const lines = el("div", "tbody");
+
+  const draw = (needle) => {
+    lines.innerHTML = "";
+    const query = (needle || "").trim().toLowerCase();
+    let shown = 0;
+    for (const segment of transcript.segments) {
+      if (query && !segment.text.toLowerCase().includes(query)) continue;
+      shown += 1;
+      const row = el("div", "tline");
+      const stamp = segment.start === null || segment.start === undefined
+        ? el("span", "cite", "")
+        : cite(segment.index);
+      row.append(stamp, el("span", "who", segment.speaker || ""));
+      const text = el("span");
+      if (query) {
+        const at = segment.text.toLowerCase().indexOf(query);
+        text.append(document.createTextNode(segment.text.slice(0, at)));
+        text.append(el("mark", null, segment.text.slice(at, at + query.length)));
+        text.append(document.createTextNode(segment.text.slice(at + query.length)));
+      } else {
+        text.textContent = segment.text;
+      }
+      row.append(text);
+      lines.append(row);
+    }
+    if (shown === 0) lines.append(el("p", "muted", "Nothing matches."));
+  };
+
+  search.oninput = () => draw(search.value);
+  wrap.append(search, lines);
+  wrap.ontoggle = () => { if (wrap.open && !lines.childElementCount) draw(""); };
+  return wrap;
 }
 
-function shareBox(meeting, data) {
-  const wrap = document.createElement("div");
-  wrap.className = "share";
-  const heading = document.createElement("h2");
-  heading.textContent = "Send by email";
-  wrap.append(heading);
+function shareBox(meeting) {
+  const wrap = el("div");
+  wrap.style.borderTop = "1px solid var(--line)";
+  wrap.style.marginTop = "2rem";
+  wrap.style.paddingTop = ".8rem";
+  wrap.append(el("h2", "sec", "Send by email"));
 
-  const to = document.createElement("input");
+  const to = el("input");
   to.type = "text";
   to.placeholder = "someone@example.com, someone-else@example.com";
   to.value = (meeting.emails || []).join(", ");
-  const note = document.createElement("input");
+  to.style.marginBottom = ".4rem";
+  const note = el("input");
   note.type = "text";
-  note.placeholder = "Optional note to go above the minutes";
+  note.placeholder = "Optional note above the minutes";
+  note.style.marginBottom = ".5rem";
 
-  const row = document.createElement("div");
-  row.className = "row";
-  const send = document.createElement("button");
-  send.className = "ghost";
-  send.textContent = "Send minutes";
-  const withTranscript = document.createElement("label");
-  withTranscript.style.fontSize = ".84rem";
-  withTranscript.style.margin = "0";
-  const box = document.createElement("input");
+  const row = el("div", "row");
+  const send = el("button", "ghost", "Send minutes");
+  const label = el("label");
+  label.style.fontSize = ".85rem";
+  const box = el("input");
   box.type = "checkbox";
-  withTranscript.append(box, document.createTextNode(" attach transcript"));
-
-  const status = document.createElement("p");
-  status.className = "muted";
+  label.append(box, document.createTextNode(" attach transcript"));
+  const status = el("p", "muted", "");
   status.style.fontSize = ".85rem";
-  status.style.margin = ".4rem 0 0";
 
   send.onclick = async () => {
     send.disabled = true;
@@ -694,113 +759,38 @@ function shareBox(meeting, data) {
     send.disabled = false;
   };
 
-  row.append(send, withTranscript);
+  row.append(send, label);
   wrap.append(to, note, row, status);
-
-  const hint = document.createElement("p");
-  hint.className = "muted";
-  hint.style.fontSize = ".8rem";
-  hint.textContent = "The minutes go as an email with the markdown attached. The recording stays on this machine.";
-  wrap.append(hint);
+  wrap.append(el("p", "muted", "The minutes go as an email with the markdown attached. " +
+    "The recording stays on this machine."));
+  wrap.lastChild.style.fontSize = ".8rem";
   return wrap;
 }
 
-function section(title, node) {
-  const wrap = document.createElement("div");
-  const h = document.createElement("h2");
-  h.textContent = title;
-  h.style.marginTop = "1.4rem";
-  wrap.append(h, node);
-  return wrap;
+async function flushNotes() {
+  clearTimeout(state.notesTimer);
+  const pad = $("notepad");
+  if (!pad || !state.meetingId || !state.notesDirty) return;
+  try {
+    await api("/api/notes", { json: { meeting_id: state.meetingId, notes: pad.value } });
+    state.notesDirty = false;
+    const line = $("saved-line");
+    if (line) line.textContent = "saved";
+  } catch (err) {
+    const line = $("saved-line");
+    if (line) line.textContent = "not saved: " + err.message;
+  }
 }
 
-function para(text) {
-  const p = document.createElement("p");
-  p.textContent = text || "";
-  p.style.margin = ".2rem 0";
-  return p;
+function showDocError(message) {
+  const line = $("job-line");
+  if (line) { line.className = "err"; line.textContent = message; return; }
+  $("statusline").textContent = message;
 }
 
 function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text == null ? "" : String(text);
-  return div.innerHTML;
-}
-
-// ----------------------------------------------------------------- up next
-
-async function refreshUpNext() {
-  let info;
-  try {
-    info = await api("/api/calendar/upcoming");
-  } catch (err) {
-    $("upnext-panel").classList.add("hidden");
-    return;
-  }
-  const host = $("upnext");
-  const panel = $("upnext-panel");
-  if (!info.signed_in || !info.events.length) {
-    panel.classList.add("hidden");
-    return;
-  }
-  panel.classList.remove("hidden");
-  host.innerHTML = "";
-
-  const list = document.createElement("ul");
-  list.className = "agenda";
-  for (const event of info.events) {
-    const li = document.createElement("li");
-
-    const when = document.createElement("span");
-    when.className = "when";
-    when.textContent = new Date(event.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-    const what = document.createElement("div");
-    what.className = "what";
-    what.textContent = event.title;
-    const sub = document.createElement("div");
-    sub.className = "sub";
-    const bits = [];
-    if (event.starts_in > 0) bits.push("in " + event.starts_in + " min");
-    else bits.push("started");
-    if (event.is_teams) bits.push("Teams");
-    else if (event.online) bits.push("online");
-    else if (event.location) bits.push(event.location);
-    if (event.attendees.length) bits.push(event.attendees.length + " invited");
-    sub.textContent = bits.join(" · ");
-    what.append(sub);
-
-    const action = document.createElement("button");
-    action.className = "ghost";
-    if (event.recorded_as) {
-      action.textContent = "Open";
-      action.onclick = () => openMeeting(event.recorded_as);
-    } else {
-      action.textContent = "Record";
-      action.onclick = () => recordEvent(event);
-    }
-
-    li.append(when, what, action);
-    list.append(li);
-  }
-  host.append(list);
-}
-
-async function recordEvent(event) {
-  if (state.recorder) {
-    $("rec-error").textContent = "Already recording — stop that first.";
-    return;
-  }
-  state.pendingEvent = {
-    event_id: event.event_id,
-    attendees: event.attendees || [],
-    emails: event.emails || [],
-  };
-  $("title").value = event.title;
-  // An online meeting is the case where the other half of the conversation is
-  // in a browser tab rather than in the room.
-  $("withTab").checked = !!event.online;
-  await startRecording();
+  const node = el("div", null, text == null ? "" : String(text));
+  return node.innerHTML;
 }
 
 // ------------------------------------------------------------------ teams
@@ -808,209 +798,105 @@ async function recordEvent(event) {
 async function refreshTeams() {
   const host = $("teams-body");
   let info;
-  try {
-    info = await api("/api/teams/state");
-  } catch (err) {
-    host.textContent = "unavailable: " + err.message;
-    return;
-  }
+  try { info = await api("/api/teams/state"); }
+  catch (err) { host.textContent = "unavailable"; return; }
   host.innerHTML = "";
 
   if (!info.configured) {
-    host.append(para("Pull the transcripts Teams already made — with speaker names."));
-    const how = document.createElement("p");
-    how.className = "muted";
-    how.style.fontSize = ".84rem";
-    how.textContent = "Needs a one-time Microsoft app registration. See the README, then run: minutely config --teams-client-id <id>";
+    host.append(el("p", "muted", "Pull the transcripts Teams already made, with speaker names."));
+    const how = el("p", "muted", "One-time setup — see the README, then: minutely config --teams-client-id <id>");
+    how.style.fontSize = ".78rem";
     host.append(how);
+    host.querySelectorAll("p").forEach((p) => { p.style.fontSize = p.style.fontSize || ".82rem"; });
     return;
   }
 
   if (!info.signed_in) {
     const login = info.login || {};
-    if (login.state === "running") {
-      host.append(codeBox(login.message));
-      schedulePoll();
-      return;
-    }
-    if (login.state === "error") {
-      const err = document.createElement("p");
-      err.className = "err";
-      err.textContent = login.message;
-      host.append(err);
-    }
-    const button = document.createElement("button");
-    button.className = "primary";
-    button.textContent = "Sign in to Microsoft 365";
+    if (login.state === "running") { host.append(el("div", "notice", login.message)); scheduleTeamsPoll(); return; }
+    if (login.state === "error") host.append(el("p", "err", login.message));
+    const button = el("button", "ghost", "Sign in to Microsoft 365");
     button.onclick = async () => {
       button.disabled = true;
       try {
         const started = await api("/api/teams/login", { json: {} });
         host.innerHTML = "";
-        host.append(codeBox(started.message || ("Enter " + started.user_code + " at " + started.verification_uri)));
+        host.append(el("div", "notice", started.message ||
+          ("Enter " + started.user_code + " at " + started.verification_uri)));
         window.open(started.verification_uri, "_blank", "noopener");
-        schedulePoll();
+        scheduleTeamsPoll();
       } catch (err) {
         button.disabled = false;
-        const problem = document.createElement("p");
-        problem.className = "err";
-        problem.textContent = err.message;
-        host.append(problem);
+        host.append(el("p", "err", err.message));
       }
     };
     host.append(button);
     return;
   }
 
-  const who = document.createElement("p");
-  who.className = "muted";
-  who.style.fontSize = ".85rem";
-  who.style.margin = "0 0 .6rem";
-  who.textContent = "Signed in as " + (info.account || "Microsoft 365");
+  const who = el("p", "muted", "Signed in as " + (info.account || "Microsoft 365"));
+  who.style.fontSize = ".82rem";
+  who.style.margin = "0 0 .5rem";
   host.append(who);
 
   const pull = info.pull || {};
   if (pull.state === "running") {
-    const line = document.createElement("p");
-    line.className = "muted";
-    line.style.fontSize = ".87rem";
+    const line = el("p", "muted");
+    line.style.fontSize = ".84rem";
     line.innerHTML = '<span class="spin"></span> ' + escapeHtml(pull.message || "working");
     host.append(line);
-    schedulePoll();
+    scheduleTeamsPoll();
     return;
   }
 
-  const button = document.createElement("button");
-  button.className = "primary";
-  button.textContent = "Pull recent Teams meetings";
+  const button = el("button", "ghost", "Pull recent meetings");
   button.onclick = async () => {
     button.disabled = true;
     await api("/api/teams/pull", { json: { days: 7 } });
     refreshTeams();
   };
   host.append(button);
-
   if (pull.state === "done" || pull.state === "error") {
-    const line = document.createElement("p");
-    line.className = pull.state === "error" ? "err" : "muted";
-    line.style.fontSize = ".84rem";
-    line.textContent = pull.message;
+    const line = el("p", pull.state === "error" ? "err" : "muted", pull.message);
+    line.style.fontSize = ".82rem";
     host.append(line);
   }
-
-  const note = document.createElement("p");
-  note.className = "muted";
-  note.style.fontSize = ".82rem";
-  note.textContent = "Only meetings where someone turned on recording or transcription in Teams have anything to pull.";
-  host.append(note);
 }
 
-function codeBox(message) {
-  const box = document.createElement("div");
-  box.className = "notice";
-  box.textContent = message || "Waiting for the sign-in to finish...";
-  return box;
-}
-
-function schedulePoll() {
+function scheduleTeamsPoll() {
   clearTimeout(state.teamsPoll);
   state.teamsPoll = setTimeout(async () => {
     await refreshTeams();
     await refreshMeetings();
+    await refreshAgenda();
   }, 3000);
 }
 
-// --------------------------------------------------------- action register
+// ------------------------------------------------------------------- boot
 
-async function refreshActions() {
-  const status = $("action-filter").value;
-  const data = await api("/api/actions?status=" + encodeURIComponent(status));
-  const host = $("action-table");
-  host.innerHTML = "";
-  if (!data.actions.length) {
-    host.append(para("Nothing here."));
-    return;
-  }
-  const table = document.createElement("table");
-  table.innerHTML = "<thead><tr><th></th><th>Action</th><th>Owner</th><th>Due</th><th>Meeting</th></tr></thead>";
-  const tbody = document.createElement("tbody");
-  for (const row of data.actions) {
-    const tr = document.createElement("tr");
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.checked = row.status === "done";
-    box.onchange = async () => {
-      await api("/api/action", { json: { id: row.id, status: box.checked ? "done" : "open" } });
-      refreshActions();
-    };
-    const tick = document.createElement("td");
-    tick.append(box);
-    const text = document.createElement("td");
-    text.textContent = row.text;
-    if (row.status === "done") text.className = "done";
-    const owner = document.createElement("td");
-    owner.textContent = row.owner || "—";
-    const due = document.createElement("td");
-    due.textContent = row.due || "—";
-    const meeting = document.createElement("td");
-    const link = document.createElement("a");
-    link.href = "#";
-    link.textContent = row.meeting_title || row.meeting_held_on || row.meeting_id;
-    link.onclick = (event) => { event.preventDefault(); openMeeting(row.meeting_id); };
-    meeting.append(link);
-    tr.append(tick, text, owner, due, meeting);
-    tbody.append(tr);
-  }
-  table.append(tbody);
-  host.append(table);
-}
-
-function showTab(name) {
-  state.tab = name;
-  $("tab-record").classList.toggle("on", name === "record");
-  $("tab-actions").classList.toggle("on", name === "actions");
-  $("recorder").classList.toggle("hidden", name !== "record");
-  $("teams-panel").classList.toggle("hidden", name !== "record");
-  if (name !== "record") $("upnext-panel").classList.add("hidden");
-  else refreshUpNext();
-  $("detail").classList.toggle("hidden", name !== "record");
-  $("actions-panel").classList.toggle("hidden", name !== "actions");
-  if (name === "actions") refreshActions();
-}
-
-// -------------------------------------------------------------------- boot
-
-$("start").onclick = startRecording;
+$("start").onclick = () => startRecording(null);
 $("stop").onclick = stopRecording;
-$("tab-record").onclick = () => showTab("record");
-$("tab-actions").onclick = () => showTab("actions");
-$("action-filter").onchange = refreshActions;
 
 window.addEventListener("beforeunload", (event) => {
-  if (state.recorder) { event.preventDefault(); event.returnValue = ""; }
+  if (state.recorder || state.notesDirty) { event.preventDefault(); event.returnValue = ""; }
 });
 
 (async () => {
   try {
     const info = await api("/api/state");
-    $("autoProcess").checked = info.auto_process;
+    state.templates = info.templates || [];
     const bits = [info.engine + " engine"];
-    bits.push(info.transcriber_ready ? info.transcriber + " ready" : "no transcriber — import transcripts");
+    bits.push(info.transcriber_ready ? info.transcriber + " ready" : "no transcriber");
     bits.push(info.stats.open_actions + " open actions");
     $("statusline").textContent = bits.join(" · ");
-    if (!info.transcriber_ready) {
-      $("rec-error").textContent =
-        "No speech-recognition binary found, so recordings will not be transcribed automatically. " +
-        "Install whisper.cpp or openai-whisper, or import a transcript with `minutely import`.";
-    }
   } catch (err) {
     $("statusline").textContent = "cannot reach the local server";
   }
   await refreshMeetings();
   await refreshTeams();
-  await refreshUpNext();
-  // The calendar moves on its own; keep the list honest without a reload.
-  setInterval(refreshUpNext, 120000);
+  await refreshAgenda();
+  // The calendar moves on its own; keep the rail honest without a reload.
+  state.agendaTimer = setInterval(refreshAgenda, 120000);
 })();
 </script>
 </body>

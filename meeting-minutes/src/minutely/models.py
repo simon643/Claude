@@ -243,6 +243,10 @@ class Minutes:
     actions: list[ActionItem] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)
     engine: str = ""
+    template: str = ""
+    # The notes as typed, kept verbatim beside what was made of them. Nobody
+    # should have to trust a summary of their own words.
+    notes: str = ""
     generated_at: str = field(default_factory=utcnow)
     # Actions the engine was unsure about. Kept out of the minutes body so the
     # action register stays trustworthy, but surfaced for a human to promote.
@@ -261,6 +265,8 @@ class Minutes:
             "review": [a.to_dict() for a in self.review],
             "open_questions": self.open_questions,
             "engine": self.engine,
+            "template": self.template,
+            "notes": self.notes,
             "generated_at": self.generated_at,
         }
 
@@ -278,6 +284,8 @@ class Minutes:
             review=[ActionItem.from_dict(a) for a in raw.get("review", [])],
             open_questions=[str(q) for q in raw.get("open_questions", [])],
             engine=str(raw.get("engine", "")),
+            template=str(raw.get("template", "")),
+            notes=str(raw.get("notes", "")),
             generated_at=str(raw.get("generated_at", "")) or utcnow(),
         )
 
@@ -302,6 +310,11 @@ class Meeting:
     # twice.
     source: str = "local"  # local | teams
     external_id: str = ""
+    # What the person in the room typed while it was happening. This is the
+    # highest-signal text in the whole system: it is what a human decided was
+    # worth writing down, and the engines treat it as authoritative.
+    notes: str = ""
+    template: str = ""
     created_at: str = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -317,6 +330,8 @@ class Meeting:
             "status": self.status,
             "source": self.source,
             "external_id": self.external_id,
+            "notes": self.notes,
+            "template": self.template,
             "created_at": self.created_at,
         }
 
@@ -334,6 +349,8 @@ class Meeting:
             status=str(raw.get("status", "new")),
             source=str(raw.get("source", "local")) or "local",
             external_id=str(raw.get("external_id", "")),
+            notes=str(raw.get("notes", "")),
+            template=str(raw.get("template", "")),
             created_at=str(raw.get("created_at", "")) or utcnow(),
         )
 

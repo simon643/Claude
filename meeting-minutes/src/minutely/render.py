@@ -4,10 +4,13 @@ Markdown is the primary format because it pastes into every wiki, ticket, and
 mail client without losing structure. HTML is a self-contained page for
 printing or sending. Text is for the terminal.
 
+Which sections appear, in what order, and under what headings comes from the
+meeting's template — a stand-up and a client call want different documents.
+
 Every renderer shows the same thing, including the parts that are easy to hide:
-which engine produced the minutes, and which items the engine was not sure
-about. Minutes that quietly drop their own uncertainty are how a wrong action
-point ends up in someone's week.
+the notes as they were typed, which engine produced the minutes, and which
+items the engine was not sure about. Minutes that quietly drop their own
+uncertainty are how a wrong action point ends up in someone's week.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import html
 from collections.abc import Callable
 from typing import Any
 
+from . import templates
 from .models import CERTAIN, ActionItem, Minutes, Transcript, format_duration
 
 FORMATS = ("md", "html", "txt", "json")
@@ -57,6 +61,7 @@ def to_markdown(
     minutes: Minutes, transcript: Transcript | None = None, duration: float | None = None
 ) -> str:
     cite = _citer(transcript)
+    tpl = templates.get(minutes.template)
     out: list[str] = [f"# {minutes.title or 'Meeting minutes'}", ""]
 
     meta = [f"**Date:** {minutes.held_on}"] if minutes.held_on else []
@@ -67,56 +72,64 @@ def to_markdown(
     if meta:
         out.extend([" · ".join(meta), ""])
 
-    if minutes.summary:
-        out.extend(["## Summary", "", minutes.summary, ""])
+    for section in tpl.sections:
+        heading = f"## {tpl.heading(section)}"
 
-    if minutes.topics:
-        out.extend(["## Discussion", ""])
-        for topic in minutes.topics:
-            marker = cite(topic.segment_index)
-            out.append(f"### {topic.title}{marker}")
-            out.append("")
-            out.extend(f"- {point}" for point in topic.points)
+        if section == "notes" and minutes.notes:
+            out.extend([heading, "", "_As typed during the meeting._", ""])
+            out.extend(f"> {line}" if line.strip() else ">" for line in minutes.notes.splitlines())
             out.append("")
 
-    if minutes.decisions:
-        out.extend(["## Decisions", ""])
-        for i, decision in enumerate(minutes.decisions, start=1):
-            out.append(f"{i}. {decision.text}{cite(decision.segment_index)}")
-        out.append("")
+        elif section == "summary" and minutes.summary:
+            out.extend([heading, "", minutes.summary, ""])
 
-    out.extend(["## Action points", ""])
-    if minutes.actions:
-        out.append("| # | Action | Owner | Due |")
-        out.append("|---|--------|-------|-----|")
-        for i, item in enumerate(minutes.actions, start=1):
-            owner = item.owner or "_unassigned_"
-            due = item.due or "—"
-            status = " ✅" if item.status == "done" else ""
-            text = _escape_pipes(item.text) + cite(item.segment_index) + status
-            out.append(f"| {i} | {text} | {owner} | {due} |")
-    else:
-        out.append("_None recorded._")
-    out.append("")
+        elif section == "topics" and minutes.topics:
+            out.extend([heading, ""])
+            for topic in minutes.topics:
+                out.append(f"### {topic.title}{cite(topic.segment_index)}")
+                out.append("")
+                out.extend(f"- {point}" for point in topic.points)
+                out.append("")
 
-    if minutes.open_questions:
-        out.extend(["## Open questions", ""])
-        out.extend(f"- {q}" for q in minutes.open_questions)
-        out.append("")
+        elif section == "decisions" and minutes.decisions:
+            out.extend([heading, ""])
+            for i, decision in enumerate(minutes.decisions, start=1):
+                out.append(f"{i}. {decision.text}{cite(decision.segment_index)}")
+            out.append("")
 
-    if minutes.review:
-        out.extend(
-            [
-                "## Possible actions (needs review)",
-                "",
-                "_Detected but not confidently a commitment — confirm before circulating._",
-                "",
-            ]
-        )
-        for item in minutes.review:
-            owner = f" — {item.owner}" if item.owner else ""
-            out.append(f"- {item.text}{owner}{cite(item.segment_index)}")
-        out.append("")
+        elif section == "actions":
+            out.extend([heading, ""])
+            if minutes.actions:
+                out.append("| # | Action | Owner | Due |")
+                out.append("|---|--------|-------|-----|")
+                for i, item in enumerate(minutes.actions, start=1):
+                    owner = item.owner or "_unassigned_"
+                    due = item.due or "—"
+                    status = " ✅" if item.status == "done" else ""
+                    text = _escape_pipes(item.text) + cite(item.segment_index) + status
+                    out.append(f"| {i} | {text} | {owner} | {due} |")
+            else:
+                out.append("_None recorded._")
+            out.append("")
+
+        elif section == "questions" and minutes.open_questions:
+            out.extend([heading, ""])
+            out.extend(f"- {q}" for q in minutes.open_questions)
+            out.append("")
+
+        elif section == "review" and minutes.review:
+            out.extend(
+                [
+                    heading,
+                    "",
+                    "_Detected but not confidently a commitment — confirm before circulating._",
+                    "",
+                ]
+            )
+            for item in minutes.review:
+                owner = f" — {item.owner}" if item.owner else ""
+                out.append(f"- {item.text}{owner}{cite(item.segment_index)}")
+            out.append("")
 
     out.extend(["---", "", _footer(minutes), ""])
     return "\n".join(out)
@@ -131,6 +144,7 @@ def to_text(
     minutes: Minutes, transcript: Transcript | None = None, duration: float | None = None
 ) -> str:
     cite = _citer(transcript)
+    tpl = templates.get(minutes.template)
     out: list[str] = [minutes.title or "Meeting minutes", "=" * 60]
     if minutes.held_on:
         out.append(f"Date      : {minutes.held_on}")
@@ -140,47 +154,61 @@ def to_text(
         out.append(f"Attendees : {', '.join(minutes.attendees)}")
     out.append("")
 
-    if minutes.summary:
-        out.extend([_wrap(minutes.summary), ""])
+    for section in tpl.sections:
+        heading = tpl.heading(section).upper()
 
-    for topic in minutes.topics:
-        out.append(f"-- {topic.title}{cite(topic.segment_index)}")
-        out.extend(_wrap(f"   * {p}", subsequent="     ") for p in topic.points)
-        out.append("")
+        if section == "notes" and minutes.notes:
+            out.append(heading)
+            out.extend(f"  | {line}" for line in minutes.notes.splitlines())
+            out.append("")
 
-    if minutes.decisions:
-        out.append("DECISIONS")
-        for i, decision in enumerate(minutes.decisions, start=1):
-            out.append(_wrap(f" {i}. {decision.text}{cite(decision.segment_index)}", subsequent="    "))
-        out.append("")
+        elif section == "summary" and minutes.summary:
+            out.extend([_wrap(minutes.summary), ""])
 
-    out.append("ACTION POINTS")
-    if minutes.actions:
-        for i, item in enumerate(minutes.actions, start=1):
-            bits = [f" {i}. {item.text}{cite(item.segment_index)}"]
-            detail = " / ".join(
-                filter(None, [item.owner or "unassigned", f"due {item.due}" if item.due else ""])
-            )
-            if detail:
-                bits.append(f"    [{detail}]")
-            if item.status != "open":
-                bits.append(f"    ({item.status})")
-            out.extend(bits)
-    else:
-        out.append(" (none recorded)")
-    out.append("")
+        elif section == "topics" and minutes.topics:
+            for topic in minutes.topics:
+                out.append(f"-- {topic.title}{cite(topic.segment_index)}")
+                out.extend(_wrap(f"   * {p}", subsequent="     ") for p in topic.points)
+                out.append("")
 
-    if minutes.open_questions:
-        out.append("OPEN QUESTIONS")
-        out.extend(_wrap(f" - {q}", subsequent="   ") for q in minutes.open_questions)
-        out.append("")
+        elif section == "decisions" and minutes.decisions:
+            out.append(heading)
+            for i, decision in enumerate(minutes.decisions, start=1):
+                out.append(
+                    _wrap(f" {i}. {decision.text}{cite(decision.segment_index)}", subsequent="    ")
+                )
+            out.append("")
 
-    if minutes.review:
-        out.append("POSSIBLE ACTIONS (needs review)")
-        for item in minutes.review:
-            owner = f" — {item.owner}" if item.owner else ""
-            out.append(_wrap(f" ? {item.text}{owner}", subsequent="   "))
-        out.append("")
+        elif section == "actions":
+            out.append(heading)
+            if minutes.actions:
+                for i, item in enumerate(minutes.actions, start=1):
+                    out.append(f" {i}. {item.text}{cite(item.segment_index)}")
+                    detail = " / ".join(
+                        filter(
+                            None,
+                            [item.owner or "unassigned", f"due {item.due}" if item.due else ""],
+                        )
+                    )
+                    if detail:
+                        out.append(f"    [{detail}]")
+                    if item.status != "open":
+                        out.append(f"    ({item.status})")
+            else:
+                out.append(" (none recorded)")
+            out.append("")
+
+        elif section == "questions" and minutes.open_questions:
+            out.append(heading)
+            out.extend(_wrap(f" - {q}", subsequent="   ") for q in minutes.open_questions)
+            out.append("")
+
+        elif section == "review" and minutes.review:
+            out.append(heading)
+            for item in minutes.review:
+                owner = f" — {item.owner}" if item.owner else ""
+                out.append(_wrap(f" ? {item.text}{owner}", subsequent="   "))
+            out.append("")
 
     out.append(_footer(minutes))
     return "\n".join(out)
@@ -204,6 +232,8 @@ th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color:
 .cite { color: #8a8f9c; font-size: .8rem; font-variant-numeric: tabular-nums; }
 .unassigned { color: #a4471f; }
 .done { text-decoration: line-through; color: #6b7280; }
+pre.notes { background: #f6f7f9; border: 1px solid #e4e6eb; border-radius: 8px; padding: .8rem 1rem;
+            white-space: pre-wrap; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .review { background: #fff8e6; border: 1px solid #f0dfb0; border-radius: 8px; padding: .75rem 1rem; }
 footer { margin-top: 2.5rem; color: #8a8f9c; font-size: .82rem; border-top: 1px solid #e4e6eb; padding-top: .75rem; }
 @media (prefers-color-scheme: dark) {
@@ -211,6 +241,7 @@ footer { margin-top: 2.5rem; color: #8a8f9c; font-size: .82rem; border-top: 1px 
   h2, th, td, footer { border-color: #2c2e36; }
   .meta, th, .cite, footer { color: #9aa0ae; }
   .review { background: #2a2410; border-color: #4a3f18; }
+  pre.notes { background: #1d1f25; border-color: #2c2e36; }
 }
 @media print { body { max-width: none; margin: 0; } .review { border: 1px solid #999; } }
 """
@@ -220,6 +251,7 @@ def to_html(
     minutes: Minutes, transcript: Transcript | None = None, duration: float | None = None
 ) -> str:
     cite = _citer(transcript, wrap='<span class="cite">{}</span>')
+    tpl = templates.get(minutes.template)
     esc = html.escape
     parts: list[str] = [
         "<!doctype html>",
@@ -238,60 +270,69 @@ def to_html(
     if meta:
         parts.append(f'<p class="meta">{" · ".join(meta)}</p>')
 
-    if minutes.summary:
-        parts.append(f"<h2>Summary</h2><p>{esc(minutes.summary)}</p>")
+    for section in tpl.sections:
+        heading = f"<h2>{esc(tpl.heading(section))}</h2>"
 
-    if minutes.topics:
-        parts.append("<h2>Discussion</h2>")
-        for topic in minutes.topics:
-            parts.append(f"<h3>{esc(topic.title)} {cite(topic.segment_index)}</h3>")
-            if topic.points:
-                items = "".join(f"<li>{esc(p)}</li>" for p in topic.points)
-                parts.append(f"<ul>{items}</ul>")
-
-    if minutes.decisions:
-        rows = "".join(
-            f"<li>{esc(d.text)} {cite(d.segment_index)}</li>" for d in minutes.decisions
-        )
-        parts.append(f"<h2>Decisions</h2><ol>{rows}</ol>")
-
-    parts.append("<h2>Action points</h2>")
-    if minutes.actions:
-        action_rows: list[str] = []
-        for i, item in enumerate(minutes.actions, start=1):
-            owner = (
-                esc(item.owner)
-                if item.owner
-                else '<span class="unassigned">unassigned</span>'
+        if section == "notes" and minutes.notes:
+            parts.append(
+                heading + f'<pre class="notes">{esc(minutes.notes)}</pre>'
             )
-            klass = ' class="done"' if item.status == "done" else ""
-            action_rows.append(
-                f"<tr{klass}><td>{i}</td><td>{esc(item.text)} {cite(item.segment_index)}</td>"
-                f"<td>{owner}</td><td>{esc(item.due) or '—'}</td></tr>"
+
+        elif section == "summary" and minutes.summary:
+            parts.append(f"{heading}<p>{esc(minutes.summary)}</p>")
+
+        elif section == "topics" and minutes.topics:
+            parts.append(heading)
+            for topic in minutes.topics:
+                parts.append(f"<h3>{esc(topic.title)} {cite(topic.segment_index)}</h3>")
+                if topic.points:
+                    items = "".join(f"<li>{esc(p)}</li>" for p in topic.points)
+                    parts.append(f"<ul>{items}</ul>")
+
+        elif section == "decisions" and minutes.decisions:
+            rows = "".join(
+                f"<li>{esc(d.text)} {cite(d.segment_index)}</li>" for d in minutes.decisions
             )
-        parts.append(
-            "<table><thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th></tr></thead>"
-            f"<tbody>{''.join(action_rows)}</tbody></table>"
-        )
-    else:
-        parts.append("<p><em>None recorded.</em></p>")
+            parts.append(f"{heading}<ol>{rows}</ol>")
 
-    if minutes.open_questions:
-        items = "".join(f"<li>{esc(q)}</li>" for q in minutes.open_questions)
-        parts.append(f"<h2>Open questions</h2><ul>{items}</ul>")
+        elif section == "actions":
+            parts.append(heading)
+            if minutes.actions:
+                action_rows: list[str] = []
+                for i, item in enumerate(minutes.actions, start=1):
+                    owner = (
+                        esc(item.owner)
+                        if item.owner
+                        else '<span class="unassigned">unassigned</span>'
+                    )
+                    klass = ' class="done"' if item.status == "done" else ""
+                    action_rows.append(
+                        f"<tr{klass}><td>{i}</td><td>{esc(item.text)} {cite(item.segment_index)}</td>"
+                        f"<td>{owner}</td><td>{esc(item.due) or '—'}</td></tr>"
+                    )
+                parts.append(
+                    "<table><thead><tr><th>#</th><th>Action</th><th>Owner</th><th>Due</th></tr></thead>"
+                    f"<tbody>{''.join(action_rows)}</tbody></table>"
+                )
+            else:
+                parts.append("<p><em>None recorded.</em></p>")
 
-    if minutes.review:
-        items = "".join(
-            f"<li>{esc(item.text)}"
-            + (f" — {esc(item.owner)}" if item.owner else "")
-            + f" {cite(item.segment_index)}</li>"
-            for item in minutes.review
-        )
-        parts.append(
-            '<h2>Possible actions (needs review)</h2><div class="review">'
-            "<p>Detected but not confidently a commitment — confirm before circulating.</p>"
-            f"<ul>{items}</ul></div>"
-        )
+        elif section == "questions" and minutes.open_questions:
+            items = "".join(f"<li>{esc(q)}</li>" for q in minutes.open_questions)
+            parts.append(f"{heading}<ul>{items}</ul>")
+
+        elif section == "review" and minutes.review:
+            items = "".join(
+                f"<li>{esc(item.text)}"
+                + (f" — {esc(item.owner)}" if item.owner else "")
+                + f" {cite(item.segment_index)}</li>"
+                for item in minutes.review
+            )
+            parts.append(
+                f'{heading}<div class="review">'
+                "<p>Detected but not confidently a commitment — confirm before circulating.</p>"
+                f"<ul>{items}</ul></div>"
+            )
 
     parts.append(f"<footer>{esc(_footer(minutes))}</footer></body></html>")
     return "\n".join(parts)
@@ -331,6 +372,14 @@ def to_email_html(
         out.append(
             '<p style="background:#f4f6fb;border-left:3px solid #2f6df6;padding:8px 12px;margin:0 0 16px">'
             f"{esc(note)}</p>"
+        )
+
+    if minutes.notes and templates.get(minutes.template).includes("notes"):
+        out.append(
+            '<h3 style="margin:20px 0 6px">Notes taken in the meeting</h3>'
+            '<pre style="background:#f6f7f9;border:1px solid #e4e6eb;border-radius:6px;'
+            'padding:8px 12px;white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace">'
+            f"{esc(minutes.notes)}</pre>"
         )
 
     if minutes.summary:
