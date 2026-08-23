@@ -16,6 +16,11 @@ teams-token.json
 # inside the package, so an ignore rule here would drop it from the wheel too.
 !src/minutely/data/demo.vtt
 
+# Written by install.sh / install.ps1 on the user's machine, not by us.
+start-minutely.sh
+start-minutely.bat
+Start minutely.command
+
 # Python
 __pycache__/
 *.py[cod]

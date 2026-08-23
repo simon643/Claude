@@ -6,8 +6,9 @@ action points.
 It runs on one machine. There is no service to sign up for, nothing is uploaded
 anywhere, and there are **zero runtime dependencies** — recording is the
 browser's own `MediaRecorder`, the UI is served by `http.server`, storage is
-`sqlite3`, and the default minutes engine is plain Python. `pip install -e .`
-pulls nothing.
+`sqlite3`, and the default minutes engine is plain Python. Installing needs the
+network for a moment — pip fetches the tool that builds the package — and after
+that the app pulls in nothing and phones nowhere.
 
 ```
 minutely demo                 # minute a bundled sample meeting, no setup at all
@@ -26,12 +27,35 @@ minutely done 4               # tick one off
 
 ## Quick start
 
+There is an installer that finds a suitable Python, builds a private
+environment beside itself, installs the app into it, and leaves you something
+to double-click:
+
 ```bash
 cd meeting-minutes
-pip install -e .
+bash install.sh                 # macOS and Linux
+```
 
+```powershell
+cd meeting-minutes
+powershell -ExecutionPolicy Bypass -File install.ps1    # Windows
+```
+
+It ends by minuting a bundled sample meeting, so you can see the output before
+deciding whether the rest is worth setting up. Afterwards, start the recorder
+by double-clicking **Start minutely.command** (macOS), **start-minutely.bat**
+(Windows), or **start-minutely.sh** (Linux).
+
+Prefer to do it by hand? It is a normal Python package:
+
+```bash
+cd meeting-minutes
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
 minutely demo
 ```
+
+Either way you need Python 3.11, 3.12 or 3.13.
 
 `demo` needs no microphone, no network, and no speech recognition: it minutes a
 bundled transcript of an invented product meeting, so you can see the output
