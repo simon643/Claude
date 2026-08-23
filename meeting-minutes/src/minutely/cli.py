@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from contextlib import suppress
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -969,9 +970,28 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _frozen() -> bool:
+    """Whether this is the packaged Windows binary rather than a CLI install."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def resolve_argv(argv: list[str] | None, frozen: bool) -> list[str]:
+    """Work out what the user meant, given how the program was started.
+
+    Someone double-clicking minutely.exe has passed no arguments and has no
+    terminal to read a usage message in: the window would print help and vanish
+    before they could see it. For them, no arguments means "open the app".
+    A terminal user still gets the usage message, which is what they expect.
+    """
+    supplied = list(sys.argv[1:] if argv is None else argv)
+    if supplied or not frozen:
+        return supplied
+    return ["record"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(resolve_argv(argv, _frozen()))
     try:
         result: int = args.func(args)
         return result
@@ -980,6 +1000,18 @@ def main(argv: list[str] | None = None) -> int:
         return 130
     except (PipelineError, EngineError, TranscriptionError, TeamsError, ShareError) as exc:
         return _fail(str(exc), getattr(args, "json", False))
+    except Exception:
+        # A double-clicked window closes the instant this returns, taking the
+        # traceback with it. Hold it open long enough to be read and reported.
+        if _frozen():
+            import traceback
+
+            traceback.print_exc()
+            print("\nminutely hit an unexpected error. The lines above say what.")
+            with suppress(EOFError, KeyboardInterrupt):
+                input("Press Enter to close...")
+            return 1
+        raise
 
 
 if __name__ == "__main__":

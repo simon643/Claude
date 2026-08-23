@@ -425,3 +425,26 @@ def test_a_template_changes_the_document(capsys: pytest.CaptureFixture[str]) -> 
     # And it sticks, so `show` renders the same document.
     code, out, _ = run(["show", "--format", "md"], capsys)
     assert "## Commitments" in out
+
+
+# -- the packaged Windows binary --------------------------------------------
+
+
+def test_a_double_clicked_binary_opens_the_app() -> None:
+    from minutely.cli import resolve_argv
+
+    # No arguments, no terminal to read a usage message in: open the recorder.
+    assert resolve_argv([], frozen=True) == ["record"]
+
+
+def test_a_terminal_user_with_no_arguments_still_gets_usage() -> None:
+    from minutely.cli import resolve_argv
+
+    assert resolve_argv([], frozen=False) == []
+
+
+def test_arguments_are_never_second_guessed() -> None:
+    from minutely.cli import resolve_argv
+
+    for frozen in (True, False):
+        assert resolve_argv(["demo", "--json"], frozen=frozen) == ["demo", "--json"]

@@ -63,7 +63,13 @@ jobs:
           if (-not (Select-String -Path "$env:RUNNER_TEMP\m.html" -Pattern "<!doctype html>" -Quiet)) {
             throw "export produced nothing"
           }
-          Write-Host "the binary works"
+          # Double-clicking passes no arguments. That must open the recorder,
+          # not print usage into a window that closes before anyone reads it.
+          $p = Start-Process -FilePath .\dist\minutely.exe -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "the binary exited on its own when double-clicked (exit $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "the binary works, and stays up when double-clicked"
 
       - uses: actions/upload-artifact@v4
         with:
