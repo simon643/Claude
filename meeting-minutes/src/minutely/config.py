@@ -16,6 +16,26 @@ from pathlib import Path
 
 APP_NAME = "minutely"
 
+# Microsoft identity platform, for the Teams integration. These are the public
+# endpoints, not credentials.
+MS_AUTHORITY = "https://login.microsoftonline.com"
+GRAPH_BASE = "https://graph.microsoft.com/v1.0"
+
+# Delegated scopes, least-privilege first. Calendars.Read finds the meetings,
+# OnlineMeetings.Read turns a join URL into a meeting id, and the transcript
+# scope reads what Teams already wrote. The recording scope is deliberately
+# NOT in the default set: pulling a transcript needs no access to anybody's
+# video, so asking for it by default would be asking for more than the job
+# needs — `minutely teams login --with-recordings` opts in.
+TEAMS_SCOPES = (
+    "offline_access",
+    "User.Read",
+    "Calendars.Read",
+    "OnlineMeetings.Read",
+    "OnlineMeetingTranscript.Read.All",
+)
+TEAMS_RECORDING_SCOPE = "OnlineMeetingRecording.Read.All"
+
 # Recording containers the browser can produce and whisper can read.
 AUDIO_SUFFIXES = frozenset({".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".wav", ".flac"})
 TRANSCRIPT_SUFFIXES = frozenset({".vtt", ".srt", ".txt", ".md", ".json"})
@@ -60,6 +80,10 @@ def exports_dir() -> Path:
     return data_dir() / "exports"
 
 
+def teams_token_path() -> Path:
+    return data_dir() / "teams-token.json"
+
+
 def db_path() -> Path:
     return data_dir() / "minutely.sqlite3"
 
@@ -90,12 +114,24 @@ class Settings:
     # are the organisation rather than a person ("the team will follow up").
     non_owners: tuple[str, ...] = ("team", "we", "everyone", "all", "group")
     ui_port: int = 0  # 0 = pick a free ephemeral port
+    # Microsoft Entra application (client) id for the Teams integration. This
+    # is a public identifier, not a secret — every user of a public client app
+    # ships the same one — so unlike an API key it is fine on disk. The
+    # environment variable still wins, for anyone who would rather not.
+    teams_client_id: str = ""
+    # "organizations" covers work and school accounts, which are the only ones
+    # the Teams meeting APIs support. A tenant GUID narrows it further.
+    teams_tenant: str = "organizations"
     # Automatically run transcribe + minutes when a browser recording stops.
     auto_process: bool = True
 
     @property
     def has_api_key(self) -> bool:
         return bool(os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+    @property
+    def client_id(self) -> str:
+        return os.environ.get("MINUTELY_TEAMS_CLIENT_ID", "").strip() or self.teams_client_id.strip()
 
     @classmethod
     def load(cls) -> Settings:

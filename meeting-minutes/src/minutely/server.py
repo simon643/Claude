@@ -31,6 +31,7 @@ import socket
 import threading
 import urllib.parse
 import webbrowser
+from collections.abc import Callable
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -44,6 +45,11 @@ from .engines import EngineError
 from .engines.factory import ENGINES
 from .models import Meeting
 from .store import Store
+from .teams import TeamsError
+from .teams.auth import TeamsAuth
+from .teams.factory import build_auth, build_client
+from .teams.graph import GraphClient
+from .teams.sync import pull_recent
 from .transcribers import TranscriptionError
 from .transcribers.factory import get_transcriber
 
@@ -57,13 +63,27 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 class AppState:
     """Shared state for the request handlers."""
 
-    def __init__(self, store: Store, settings: Settings, token: str) -> None:
+    def __init__(
+        self,
+        store: Store,
+        settings: Settings,
+        token: str,
+        *,
+        teams_auth: Callable[[], TeamsAuth] | None = None,
+        teams_client: Callable[[], GraphClient] | None = None,
+    ) -> None:
         self.store = store
         self.settings = settings
         self.token = token
         self.lock = threading.Lock()
         # meeting_id -> {"state": running|done|error, "message": str, "step": str}
+        # Two reserved keys, "teams-login" and "teams-pull", track the Teams
+        # jobs, which are per-server rather than per-meeting.
         self.jobs: dict[str, dict[str, str]] = {}
+        # Injectable so the tests can drive the whole Teams path without a
+        # tenant, a browser, or a network.
+        self.teams_auth = teams_auth or (lambda: build_auth(self.settings))
+        self.teams_client = teams_client or (lambda: build_client(self.settings))
 
     def set_job(self, meeting_id: str, state: str, message: str = "", step: str = "") -> None:
         with self.lock:
@@ -148,7 +168,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         try:
             self._route_get(path, query)
-        except (EngineError, TranscriptionError, pipeline.PipelineError) as exc:
+        except (EngineError, TranscriptionError, pipeline.PipelineError, TeamsError) as exc:
             self._error(400, str(exc))
         except Exception as exc:
             self._error(500, f"{type(exc).__name__}: {exc}")
@@ -195,6 +215,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             status = (query.get("status") or ["open"])[0]
             owner = (query.get("owner") or [""])[0]
             self._json({"actions": store.action_rows(status=status, owner=owner or None)})
+
+        elif path == "/api/teams/state":
+            self._json(self._teams_state())
 
         elif path == "/api/job":
             meeting_id = (query.get("meeting") or [""])[0]
@@ -258,11 +281,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._json(self._handle_action(payload))
             elif path == "/api/meeting/update":
                 self._json(self._handle_update(payload))
+            elif path == "/api/teams/login":
+                self._json(self._handle_teams_login())
+            elif path == "/api/teams/pull":
+                self._json(self._handle_teams_pull(payload))
             else:
                 self._error(404, "unknown endpoint")
         except json.JSONDecodeError:
             self._error(400, "invalid JSON body")
-        except (EngineError, TranscriptionError, pipeline.PipelineError) as exc:
+        except (EngineError, TranscriptionError, pipeline.PipelineError, TeamsError) as exc:
             self._error(400, str(exc))
         except Exception as exc:
             self._error(500, f"{type(exc).__name__}: {exc}")
@@ -357,6 +384,91 @@ class Handler(http.server.BaseHTTPRequestHandler):
             meeting.title = title
         return {"meeting": self.state.store.upsert_meeting(meeting).to_dict()}
 
+    # -- Teams ------------------------------------------------------------
+
+    def _teams_state(self) -> dict[str, Any]:
+        auth = self.state.teams_auth()
+        tokens = auth.tokens
+        return {
+            "configured": bool(self.state.settings.client_id),
+            "signed_in": auth.signed_in,
+            "account": tokens.account if tokens else "",
+            "recordings": bool(tokens and tokens.can_read_recordings),
+            "login": self.state.job("teams-login"),
+            "pull": self.state.job("teams-pull"),
+        }
+
+    def _handle_teams_login(self) -> dict[str, Any]:
+        """Start a device-code sign-in and poll for it on a worker thread.
+
+        The page shows the code; the user types it into microsoft.com in
+        whatever browser they are already signed in to. Polling can take a
+        minute or two, which is exactly why it does not happen in the request.
+        """
+        if self.state.job("teams-login").get("state") == "running":
+            raise TeamsError("a sign-in is already in progress")
+        auth = self.state.teams_auth()
+        code = auth.begin()
+        self.state.set_job(
+            "teams-login", "running", f"enter {code.user_code} at {code.verification_uri}"
+        )
+
+        def work() -> None:
+            try:
+                tokens = auth.poll(code)
+                self.state.set_job(
+                    "teams-login", "done", f"signed in as {tokens.account or 'Microsoft 365'}"
+                )
+            except TeamsError as exc:
+                self.state.set_job("teams-login", "error", str(exc))
+
+        threading.Thread(target=work, daemon=True, name="minutely-teams-login").start()
+        return {
+            "user_code": code.user_code,
+            "verification_uri": code.verification_uri,
+            "message": code.message,
+        }
+
+    def _handle_teams_pull(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.state.job("teams-pull").get("state") == "running":
+            return {"ok": True, "job": self.state.job("teams-pull")}
+        days = int(payload.get("days", 7) or 7)
+        self.state.set_job("teams-pull", "running", "asking Microsoft for your meetings")
+
+        def work() -> None:
+            store = Store(self.state.store.path)
+            try:
+                results = pull_recent(
+                    store,
+                    self.state.teams_client(),
+                    self.state.settings,
+                    days_back=days,
+                    on_progress=lambda meeting: self.state.set_job(
+                        "teams-pull", "running", f"checking {meeting.title}"
+                    ),
+                )
+                imported = [r for r in results if r.ok]
+                failed = [r for r in results if r.status == "error"]
+                if failed and not imported:
+                    self.state.set_job("teams-pull", "error", failed[0].detail)
+                else:
+                    self.state.set_job(
+                        "teams-pull",
+                        "done",
+                        f"{len(imported)} of {len(results)} meeting(s) minuted"
+                        if results
+                        else "no Teams meetings found in that window",
+                    )
+            except TeamsError as exc:
+                self.state.set_job("teams-pull", "error", str(exc))
+            except Exception as exc:
+                self.state.set_job("teams-pull", "error", f"{type(exc).__name__}: {exc}")
+            finally:
+                store.close()
+
+        threading.Thread(target=work, daemon=True, name="minutely-teams-pull").start()
+        return {"ok": True, "job": self.state.job("teams-pull")}
+
     # -- background work --------------------------------------------------
 
     def _start_job(self, meeting: Meeting, engine: str | None) -> None:
@@ -422,12 +534,17 @@ def _free_port(preferred: int = 0) -> int:
 
 
 def build_server(
-    store: Store, settings: Settings, port: int | None = None
+    store: Store,
+    settings: Settings,
+    port: int | None = None,
+    *,
+    teams_auth: Callable[[], TeamsAuth] | None = None,
+    teams_client: Callable[[], GraphClient] | None = None,
 ) -> tuple[http.server.ThreadingHTTPServer, str]:
     """Create the server and return it with its URL. Exposed for testing."""
     token = secrets.token_urlsafe(32)
     chosen = _free_port(port if port is not None else settings.ui_port)
-    state = AppState(store, settings, token)
+    state = AppState(store, settings, token, teams_auth=teams_auth, teams_client=teams_client)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", chosen), partial(Handler, state=state))
     return server, f"http://127.0.0.1:{chosen}/?token={token}"
 

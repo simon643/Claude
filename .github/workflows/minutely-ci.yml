@@ -81,6 +81,10 @@ jobs:
           grep -q '<!doctype html>' /tmp/minutes.html
           minutely import src/minutely/data/demo.vtt --title "CI import" --process --json > /dev/null
           minutely show --format md | grep -q '## Action points'
+          # The Teams commands must be reachable without a tenant, and must say
+          # what to do rather than stack-trace when nothing is configured.
+          minutely teams status | grep -q 'application id'
+          minutely teams --help > /dev/null
 
   no-real-recordings:
     if: >-
@@ -109,3 +113,16 @@ jobs:
             exit 1
           fi
           echo "only the synthetic demo transcript is tracked"
+
+      # The Teams integration stores a Microsoft refresh token. It lives in the
+      # data directory, never the repo, and this is the tripwire for that.
+      - name: Check for tracked Microsoft tokens
+        run: |
+          tokens=$(git ls-files --full-name -- ':/meeting-minutes/**' \
+            | grep -E '(^|/)(teams-token|token)\.json$' || true)
+          if [ -n "$tokens" ]; then
+            echo "::error::a Microsoft token file is tracked under meeting-minutes" >&2
+            echo "$tokens" >&2
+            exit 1
+          fi
+          echo "no token files tracked"

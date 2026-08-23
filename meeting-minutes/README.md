@@ -12,6 +12,7 @@ pulls nothing.
 ```
 minutely demo                 # minute a bundled sample meeting, no setup at all
 minutely record               # open the recorder in your browser
+minutely teams pull           # pull Teams meeting transcripts and minute them
 minutely import meeting.vtt   # already have a transcript? start from that
 minutely minutes              # write the minutes for the latest meeting
 minutely actions              # the action register, across every meeting
@@ -79,11 +80,15 @@ room.
 
 - **The room.** The default is your microphone, which is what you want for a
   meeting you are sitting in.
-- **A call.** Tick *Also capture the meeting tab's audio* and pick the Zoom /
-  Teams / Meet tab. The mic and the tab are mixed into one track, so remote
-  participants are recorded too. This relies on tab audio capture, which
-  Chrome supports and most other browsers do not; if it is unavailable the app
-  says so and records the microphone alone.
+- **A call in a browser tab.** Tick *Also capture the meeting tab's audio* and
+  pick the Zoom / Teams / Meet tab. The mic and the tab are mixed into one
+  track, so remote participants are recorded too. This relies on tab audio
+  capture, which Chrome supports and most other browsers do not; if it is
+  unavailable the app says so and records the microphone alone.
+- **Teams.** For Teams specifically, prefer the integration below: Teams has
+  already recorded and transcribed the meeting, with speaker names, and pulling
+  that beats re-recording it. Local capture is the fallback for meetings nobody
+  transcribed.
 - **Crash safety.** Audio is appended to the file every five seconds. A crash
   costs seconds, not the meeting.
 
@@ -118,6 +123,126 @@ minutely config --transcriber none      # stop asking for a whisper binary
 
 `.vtt`, `.srt`, whisper `.json` (both the OpenAI and whisper.cpp layouts), and
 plain text with `Name:` labels are all understood.
+
+## Microsoft Teams
+
+Teams records and transcribes meetings itself, server-side, and its transcript
+carries the one thing local recording cannot give you: **who said what**. So
+this integration does not re-record your Teams calls. It signs in as you, finds
+your Teams meetings, and pulls the transcript Teams already produced — then
+runs it through the same engines as everything else.
+
+```bash
+minutely teams login          # one-time device-code sign-in
+minutely teams list           # Teams meetings on your calendar
+minutely teams pull           # import the last 7 days and minute them
+minutely teams pull --days 30 --match "product sync"
+```
+
+Because the transcript arrives with speaker labels, actions come out owned:
+
+```
++ 2026-08-24 Weekly product sync
+= 2026-08-25 Design review — already imported
+. 2026-08-25 Quick sync — Teams captured no transcript for this meeting
+
+1 meeting(s) minuted. Read them with: minutely show
+```
+
+Pulling twice is safe: meetings are tracked by their calendar event id, so the
+second run imports nothing. `--force` re-imports one anyway.
+
+The same thing is in the browser UI — `minutely record` shows a **Microsoft
+Teams** panel with sign-in and a *Pull recent Teams meetings* button.
+
+### What it cannot do
+
+**It cannot press Record for you.** Nothing in Microsoft Graph starts a Teams
+recording; a participant does that in the Teams client, or an administrator
+sets a compliance-recording policy for the tenant. If nobody turned on
+recording or transcription while the meeting was running, there is nothing to
+pull — capture the audio locally instead (`minutely record`).
+
+It also reads only as far as you can: your meetings, your tenant's rules.
+
+### One-time setup
+
+You need a Microsoft Entra app registration. It takes about three minutes and
+issues no secret — this is a public client, so there is nothing to keep safe.
+
+1. Go to <https://entra.microsoft.com> → **App registrations** → **New
+   registration**. Name it anything; leave the redirect URI blank.
+2. **Authentication** → **Advanced settings** → **Allow public client flows** →
+   **Yes**. Device code sign-in does not work without this.
+3. **API permissions** → **Add a permission** → **Microsoft Graph** →
+   **Delegated permissions**, and add:
+
+   | Permission | Why |
+   |---|---|
+   | `Calendars.Read` | find your Teams meetings and their join URLs |
+   | `OnlineMeetings.Read` | turn a join URL into the meeting behind it |
+   | `OnlineMeetingTranscript.Read.All` | read the transcripts of those meetings |
+   | `OnlineMeetingRecording.Read.All` | *optional* — only for `--with-recording` |
+   | `User.Read` | show which account is signed in |
+
+4. Click **Grant admin consent**. The transcript and recording scopes require
+   it; if you are not an administrator, someone who is will have to approve
+   them once for the tenant.
+5. Copy the **Application (client) ID** and hand it to minutely:
+
+```bash
+minutely config --teams-client-id 11111111-2222-3333-4444-555555555555
+minutely teams login
+```
+
+`teams login` prints a short code and a URL. Type the code into
+microsoft.com/devicelogin in a browser where you are already signed in to work,
+and the terminal picks up from there. Tokens land in
+`~/.local/share/minutely/teams-token.json` at `0600`; the refresh token rotates
+on every use and is written to disk before it is used. `minutely teams logout`
+forgets them locally (it does not revoke consent — do that in Entra).
+
+Recordings are **not** requested by default: reading a transcript needs no
+access to anybody's video. Opt in with `minutely teams login --with-recordings`
+and then `minutely teams pull --with-recording`, and be aware an hour of Teams
+video is a few hundred megabytes.
+
+### When it does not work
+
+Microsoft's answers are specific, so minutely passes them through rather than
+flattening everything to "failed":
+
+| What you see | What it means |
+|---|---|
+| *Teams captured no transcript for this meeting* | Nobody turned on recording or transcription. Nothing to fix — record locally next time. |
+| *your Microsoft 365 administrator has turned off Graph API access to Teams transcripts* | A tenant switch, not a permission. An admin re-enables it in the Teams admin centre. |
+| *the sign-in is missing consent for this permission* | The transcript scope was never admin-consented. Step 4 above. |
+| *no speaker attribution (tenant policy)* | The tenant forbids speaker-attributed transcripts. The text still imports; actions come out unassigned. |
+| *no Teams meeting behind that invite* | The calendar entry is not a Teams meeting Graph can resolve — for instance a channel meeting created outside the calendar. |
+
+Two Graph limits are worth knowing up front: the transcript APIs only cover
+meetings that have a calendar event behind them, and they only work while the
+meeting has not expired from Microsoft's retention window. Pull regularly
+rather than going back a year.
+
+### The Teams desktop app, without a transcript
+
+If the meeting was never transcribed and you are in the desktop client (so
+there is no tab to capture), record the system audio and import the file:
+
+```bash
+# macOS (needs a loopback device such as BlackHole)
+ffmpeg -f avfoundation -i ":BlackHole 2ch" meeting.wav
+# Linux (PulseAudio / PipeWire monitor source)
+ffmpeg -f pulse -i default.monitor meeting.wav
+# Windows
+ffmpeg -f dshow -i audio="Stereo Mix (Realtek Audio)" meeting.wav
+
+minutely import meeting.wav --title "Design review" --process
+```
+
+That gives you one unlabelled voice track — the same trade-off as any
+in-the-room recording.
 
 ## The two minutes engines
 
@@ -175,6 +300,7 @@ command:
 ├── transcripts/                  # .vtt per meeting
 ├── exports/
 ├── minutely.sqlite3              # meetings, minutes, action register
+├── teams-token.json              # Microsoft refresh token, 0600
 └── config.json
 ```
 
@@ -214,6 +340,9 @@ The page loads nothing from the network and is served under a
 | `minutely list` | every meeting |
 | `minutely actions` | the action register (`--status`, `--owner`, `--meeting`) |
 | `minutely done/reopen/dropped <id>` | change an action's status |
+| `minutely teams login/status/logout` | Microsoft 365 sign-in for the Teams integration |
+| `minutely teams list` | Teams meetings on your calendar |
+| `minutely teams pull` | import Teams transcripts and minute them (`--days`, `--match`, `--with-recording`) |
 | `minutely config` | show or change settings |
 | `minutely demo` | minute the bundled sample meeting |
 | `minutely delete <meeting>` | remove a meeting (`--files` for the audio too) |
@@ -228,8 +357,8 @@ browser MediaRecorder ──chunks──> server.py ──> recordings/*.webm
                                                      │
                                           transcribers/whisper.py
                                                      │
-                                                transcripts/*.vtt
-                                                     │
+Microsoft Graph ──teams/sync.py──────────────> transcripts/*.vtt
+ (transcript Teams already made)                     │
                               engines/rules.py  or  engines/claude.py
                                                      │
                                        store.py (sqlite) ──> render.py
@@ -241,6 +370,7 @@ browser MediaRecorder ──chunks──> server.py ──> recordings/*.webm
 | `transcripts.py` | VTT / SRT / whisper JSON / plain text in, `Transcript` out |
 | `engines/rules.py` | the offline extraction: actions, owners, deadlines, decisions, topics |
 | `engines/claude.py` | the Anthropic engine, plus the quote-grounding that keeps it honest |
+| `teams/` | Microsoft 365 sign-in (`auth.py`), a small Graph client (`graph.py`), and calendar-to-minutes (`sync.py`) |
 | `store.py` | meetings, transcripts, minutes history, and the action register |
 | `render.py` | Markdown, HTML, text, JSON |
 | `server.py` + `ui/app.html` | the loopback recorder and review UI |
@@ -255,16 +385,20 @@ pytest -q
 ```
 
 The test suite runs against a throwaway `MINUTELY_HOME`, needs no audio, no
-network, and no whisper binary, and exercises the HTTP server over real
-requests.
+network, no whisper binary, and no Microsoft tenant. It exercises the HTTP
+server over real requests, and the whole Teams path — device-code sign-in,
+token refresh, throttling, paging, transcript fallback, deduplication — against
+a fake Microsoft (`tests/fakes.py`).
 
 ## Limitations
 
-- **No speaker diarisation.** whisper transcribes words, not who said them. A
-  recording of a room gives one unlabelled voice, so actions from it come out
-  unassigned. Transcripts that already carry speaker labels — Teams, Zoom, Meet,
-  or a `Name:` text file — keep them, and that is where the owner attribution
-  comes from.
+- **No speaker diarisation in local recordings.** whisper transcribes words, not
+  who said them. A recording of a room gives one unlabelled voice, so actions
+  from it come out unassigned. Transcripts that already carry speaker labels —
+  `minutely teams pull`, a Zoom or Meet export, or a `Name:` text file — keep
+  them, and that is where owner attribution comes from.
+- **minutely cannot start a Teams recording.** No API can. Someone has to press
+  Record in the meeting, or the tenant has to have a recording policy.
 - **English.** The rules engine's patterns are English. `--language` is passed
   to whisper, but a French transcript will be transcribed well and minuted
   badly. Use `--engine claude` for other languages.

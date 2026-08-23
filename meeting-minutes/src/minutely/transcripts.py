@@ -21,11 +21,10 @@ from pathlib import Path
 
 from .models import Segment, Transcript, looks_like_sentence_colon
 
-_TIMING = re.compile(
-    r"(?P<start>\d{1,2}:\d{2}:\d{2}[.,]\d{1,3}|\d{1,2}:\d{2}[.,]\d{1,3})"
-    r"\s*-->\s*"
-    r"(?P<end>\d{1,2}:\d{2}:\d{2}[.,]\d{1,3}|\d{1,2}:\d{2}[.,]\d{1,3})"
-)
+# Zero padding is optional and the fraction may be 1-3 digits: the spec says
+# 00:01:02.500, Teams emits 0:1:2.5, and both have to parse.
+_STAMP = r"\d{1,3}:\d{1,2}:\d{1,2}[.,]\d{1,3}|\d{1,3}:\d{1,2}[.,]\d{1,3}"
+_TIMING = re.compile(rf"(?P<start>{_STAMP})\s*-->\s*(?P<end>{_STAMP})")
 # WebVTT marks the speaker with a voice span: <v Alice>text</v>.
 _VOICE = re.compile(r"<v\s+([^>]+)>(.*?)(?:</v>)?$", re.IGNORECASE | re.DOTALL)
 _TAG = re.compile(r"</?[^>]+>")
@@ -81,10 +80,10 @@ def parse_cues(text: str, source: str = "") -> Transcript:
             if match and timing is None:
                 timing = match
                 continue
-            # A bare cue number (SRT) or a cue identifier (VTT) carries nothing.
-            if timing is None and re.fullmatch(r"\d+", line.strip()):
-                continue
-            if timing is None and "-->" in line:
+            # Everything before the timings is the cue identifier — an SRT
+            # sequence number, or the GUID Teams puts there. None of it is
+            # speech, and appending it would put a GUID in the minutes.
+            if timing is None:
                 continue
             body_lines.append(line.strip())
         body = " ".join(body_lines).strip()

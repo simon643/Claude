@@ -27,6 +27,10 @@ from .pipeline import (
 )
 from .pipeline import transcribe as run_transcribe
 from .store import Store
+from .teams import TeamsError
+from .teams.auth import DeviceCode
+from .teams.factory import build_auth, build_client
+from .teams.sync import TeamsMeeting, list_meetings, pull_recent
 from .transcribers import TranscriptionError
 from .transcribers.factory import TRANSCRIBERS, get_transcriber
 
@@ -301,7 +305,16 @@ def cmd_action_status(args: argparse.Namespace) -> int:
 def cmd_config(args: argparse.Namespace) -> int:
     settings = Settings.load()
     changed = False
-    for field in ("engine", "transcriber", "whisper_bin", "whisper_model", "language", "model"):
+    for field in (
+        "engine",
+        "transcriber",
+        "whisper_bin",
+        "whisper_model",
+        "language",
+        "model",
+        "teams_client_id",
+        "teams_tenant",
+    ):
         value = getattr(args, field, None)
         if value:
             setattr(settings, field, value)
@@ -331,6 +344,10 @@ def cmd_config(args: argparse.Namespace) -> int:
             print(f"  model     : {settings.whisper_model or '(not set)'}")
         print(f"language    : {settings.language}")
         print(f"auto process: {settings.auto_process}")
+        teams_state = "not configured"
+        if settings.client_id:
+            teams_state = "signed in" if build_auth(settings).signed_in else "configured, not signed in"
+        print(f"teams       : {teams_state}")
         if changed:
             print("saved")
     return 0
@@ -381,6 +398,170 @@ def cmd_delete(args: argparse.Namespace) -> int:
         return 0
     finally:
         store.close()
+
+
+# --------------------------------------------------------------------------
+# Teams
+# --------------------------------------------------------------------------
+
+
+def cmd_teams_login(args: argparse.Namespace) -> int:
+    settings = Settings.load()
+    auth = build_auth(
+        settings,
+        client_id=args.client_id or "",
+        tenant=args.tenant or "",
+        with_recordings=args.with_recordings,
+    )
+
+    def announce(code: DeviceCode) -> None:
+        if args.json:
+            return
+        print(code.message or f"Go to {code.verification_uri} and enter the code {code.user_code}")
+        print()
+        print(f"  code : {code.user_code}")
+        print(f"  url  : {code.verification_uri}")
+        print()
+        print("waiting for you to finish signing in... (Ctrl+C to give up)")
+
+    try:
+        tokens = auth.login(announce)
+    except TeamsError as exc:
+        return _fail(str(exc), args.json)
+
+    # Remember the application id so the next sign-in needs no flags.
+    changed = False
+    if args.client_id and args.client_id != settings.teams_client_id:
+        settings.teams_client_id = args.client_id
+        changed = True
+    if args.tenant and args.tenant != settings.teams_tenant:
+        settings.teams_tenant = args.tenant
+        changed = True
+    if changed:
+        settings.save()
+
+    payload = {
+        "account": tokens.account,
+        "tenant": tokens.tenant,
+        "scopes": tokens.scopes,
+        "recordings": tokens.can_read_recordings,
+    }
+    _emit(payload, args.json)
+    if not args.json:
+        print(f"signed in as {tokens.account or '(unknown account)'}")
+        print("  next : minutely teams list")
+    return 0
+
+
+def cmd_teams_status(args: argparse.Namespace) -> int:
+    settings = Settings.load()
+    auth = build_auth(settings)
+    tokens = auth.tokens
+    payload = {
+        "signed_in": auth.signed_in,
+        "account": tokens.account if tokens else "",
+        "tenant": tokens.tenant if tokens else settings.teams_tenant,
+        "client_id_set": bool(settings.client_id),
+        "scopes": tokens.scopes if tokens else [],
+        "recordings": bool(tokens and tokens.can_read_recordings),
+    }
+    _emit(payload, args.json)
+    if not args.json:
+        if not settings.client_id:
+            print("no Microsoft application id configured")
+            print("  set one : minutely config --teams-client-id <id>")
+        elif not auth.signed_in:
+            print("not signed in to Microsoft")
+            print("  sign in : minutely teams login")
+        else:
+            print(f"signed in as {payload['account'] or '(unknown account)'}")
+            print(f"  tenant     : {payload['tenant']}")
+            print(f"  recordings : {'yes' if payload['recordings'] else 'no (transcripts only)'}")
+    return 0
+
+
+def cmd_teams_logout(args: argparse.Namespace) -> int:
+    removed = build_auth().logout()
+    _emit({"signed_out": removed}, args.json)
+    if not args.json:
+        print("signed out" if removed else "was not signed in")
+        print("note: this forgets the local tokens; it does not revoke consent in Microsoft 365")
+    return 0
+
+
+def cmd_teams_list(args: argparse.Namespace) -> int:
+    try:
+        graph = build_client()
+        meetings = list_meetings(graph, days_back=args.days, days_forward=1, limit=args.limit)
+    except TeamsError as exc:
+        return _fail(str(exc), args.json)
+
+    _emit([m.to_dict() for m in meetings], args.json)
+    if args.json:
+        return 0
+    if not meetings:
+        print(f"no Teams meetings on your calendar in the last {args.days} days")
+        return 0
+    print(f"{'WHEN':<17} {'ORGANISER':<22} SUBJECT")
+    for meeting in meetings:
+        when = meeting.start.strftime("%Y-%m-%d %H:%M")
+        print(f"{when:<17} {(meeting.organizer or '—')[:21]:<22} {meeting.title}")
+    print()
+    print(f"pull them in with: minutely teams pull --days {args.days}")
+    return 0
+
+
+def cmd_teams_pull(args: argparse.Namespace) -> int:
+    store = Store()
+    try:
+        settings = Settings.load()
+        graph = build_client(settings)
+
+        def progress(meeting: TeamsMeeting) -> None:
+            if not args.json:
+                print(f"  checking {meeting.start.strftime('%Y-%m-%d')} {meeting.title}...")
+
+        results = pull_recent(
+            store,
+            graph,
+            settings,
+            days_back=args.days,
+            limit=args.limit,
+            with_recording=args.with_recording,
+            engine=args.engine,
+            force=args.force,
+            match=args.match or "",
+            on_progress=progress,
+        )
+    except TeamsError as exc:
+        return _fail(str(exc), args.json)
+    finally:
+        store.close()
+
+    _emit([r.to_dict() for r in results], args.json)
+    if args.json:
+        return 0
+
+    imported = [r for r in results if r.ok]
+    print()
+    for result in results:
+        mark = {"imported": "+", "updated": "~", "skipped": "=", "no-transcript": ".", "error": "!"}
+        print(
+            f"{mark.get(result.status, '?')} {result.teams.start.strftime('%Y-%m-%d')} "
+            f"{result.teams.title}"
+            + (f" — {result.detail}" if result.detail else "")
+        )
+    print()
+    if imported:
+        print(f"{len(imported)} meeting(s) minuted. Read them with: minutely show")
+        print("Open actions across every meeting: minutely actions")
+    elif results:
+        print("nothing new to import.")
+        print("A meeting only has a transcript if someone turned on recording or")
+        print("transcription in Teams while it was running.")
+    else:
+        print(f"no Teams meetings on your calendar in the last {args.days} days")
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -468,6 +649,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--language", help="spoken language hint, e.g. en")
     p.add_argument("--model", help="Anthropic model id for the claude engine")
     p.add_argument(
+        "--teams-client-id",
+        dest="teams_client_id",
+        help="Microsoft Entra application (client) id for the Teams integration",
+    )
+    p.add_argument(
+        "--teams-tenant",
+        dest="teams_tenant",
+        help="Microsoft tenant id, or 'organizations' (default)",
+    )
+    p.add_argument(
         "--auto-process",
         dest="auto_process",
         action=argparse.BooleanOptionalAction,
@@ -475,6 +666,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="transcribe and minute automatically when a recording stops",
     )
     p.set_defaults(func=cmd_config)
+
+    teams = sub.add_parser(
+        "teams",
+        parents=[common],
+        help="pull Teams meeting transcripts and minute them",
+        description=(
+            "Teams records and transcribes meetings itself. These commands sign in to "
+            "Microsoft 365, find your Teams meetings, and pull the transcripts Teams "
+            "already produced — including the speaker names local recording cannot give you."
+        ),
+    )
+    teams_sub = teams.add_subparsers(dest="teams_command", required=True)
+
+    t = teams_sub.add_parser("login", parents=[common], help="sign in to Microsoft 365")
+    t.add_argument("--client-id", help="Microsoft Entra application (client) id")
+    t.add_argument("--tenant", help="tenant id, or 'organizations' (default)")
+    t.add_argument(
+        "--with-recordings",
+        action="store_true",
+        help="also request permission to download meeting recordings",
+    )
+    t.set_defaults(func=cmd_teams_login)
+
+    t = teams_sub.add_parser("status", parents=[common], help="who is signed in, and with what")
+    t.set_defaults(func=cmd_teams_status)
+
+    t = teams_sub.add_parser("logout", parents=[common], help="forget the local Microsoft tokens")
+    t.set_defaults(func=cmd_teams_logout)
+
+    t = teams_sub.add_parser("list", parents=[common], help="Teams meetings on your calendar")
+    t.add_argument("--days", type=int, default=7, help="how far back to look (default: 7)")
+    t.add_argument("--limit", type=int, default=25)
+    t.set_defaults(func=cmd_teams_list)
+
+    t = teams_sub.add_parser("pull", parents=[common], help="import Teams transcripts and minute them")
+    t.add_argument("--days", type=int, default=7, help="how far back to look (default: 7)")
+    t.add_argument("--limit", type=int, default=20)
+    t.add_argument("--match", help="only meetings whose subject contains this text")
+    t.add_argument("--engine", choices=ENGINES, help="minutes engine to use")
+    t.add_argument(
+        "--with-recording",
+        action="store_true",
+        help="also download the meeting recording (needs `teams login --with-recordings`)",
+    )
+    t.add_argument("--force", action="store_true", help="re-import meetings already pulled")
+    t.set_defaults(func=cmd_teams_pull)
 
     p = sub.add_parser("demo", parents=[common], help="minute a bundled sample meeting")
     p.add_argument("--engine", choices=ENGINES, default="rules")
@@ -498,7 +735,7 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130
-    except (PipelineError, EngineError, TranscriptionError) as exc:
+    except (PipelineError, EngineError, TranscriptionError, TeamsError) as exc:
         return _fail(str(exc), getattr(args, "json", False))
 
 

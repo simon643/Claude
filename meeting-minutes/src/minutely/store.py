@@ -23,7 +23,7 @@ from typing import Any
 from .config import db_path, ensure_dirs
 from .models import ActionItem, Meeting, Minutes, Transcript
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -37,11 +37,14 @@ CREATE TABLE IF NOT EXISTS meetings (
     transcript_path TEXT NOT NULL DEFAULT '',
     participants    TEXT NOT NULL DEFAULT '[]',
     status          TEXT NOT NULL DEFAULT 'new',
+    source          TEXT NOT NULL DEFAULT 'local',
+    external_id     TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_held_on ON meetings(held_on);
+CREATE INDEX IF NOT EXISTS idx_meetings_external ON meetings(source, external_id);
 
 CREATE TABLE IF NOT EXISTS transcripts (
     meeting_id  TEXT PRIMARY KEY REFERENCES meetings(meeting_id) ON DELETE CASCADE,
@@ -85,6 +88,25 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def _migrate(cur: sqlite3.Cursor, from_version: int) -> None:
+    """Bring an older database up to the current schema.
+
+    `CREATE TABLE IF NOT EXISTS` gives a new install the current shape but
+    silently leaves an existing table alone, so added columns need an explicit
+    ALTER. Each step is guarded by what is actually in the table rather than by
+    the version alone, so a half-applied migration can be re-run.
+    """
+    if from_version < 2:
+        columns = {row["name"] for row in cur.execute("PRAGMA table_info(meetings)")}
+        if "source" not in columns:
+            cur.execute("ALTER TABLE meetings ADD COLUMN source TEXT NOT NULL DEFAULT 'local'")
+        if "external_id" not in columns:
+            cur.execute("ALTER TABLE meetings ADD COLUMN external_id TEXT NOT NULL DEFAULT ''")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_meetings_external ON meetings(source, external_id)"
+        )
+
+
 class Store:
     """Thin wrapper over the SQLite file."""
 
@@ -100,6 +122,9 @@ class Store:
             row = cur.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 cur.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+            elif int(row["version"]) < SCHEMA_VERSION:
+                _migrate(cur, int(row["version"]))
+                cur.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
 
     # -- plumbing ---------------------------------------------------------
 
@@ -140,8 +165,9 @@ class Store:
             cur.execute(
                 """
                 INSERT INTO meetings (meeting_id, title, held_on, duration, audio_path,
-                                      transcript_path, participants, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      transcript_path, participants, status, source,
+                                      external_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(meeting_id) DO UPDATE SET
                     title = excluded.title,
                     held_on = excluded.held_on,
@@ -153,6 +179,12 @@ class Store:
                                            ELSE excluded.transcript_path END,
                     participants = excluded.participants,
                     status = excluded.status,
+                    source = excluded.source,
+                    -- A later write that knows nothing about the origin must
+                    -- not erase it, the same way it must not erase the audio.
+                    external_id = CASE WHEN excluded.external_id = ''
+                                       THEN meetings.external_id
+                                       ELSE excluded.external_id END,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -164,6 +196,8 @@ class Store:
                     meeting.transcript_path,
                     json.dumps(meeting.participants),
                     meeting.status,
+                    meeting.source,
+                    meeting.external_id,
                     meeting.created_at or _now(),
                     _now(),
                 ),
@@ -191,6 +225,17 @@ class Store:
                 (f"{needle}%", f"%{needle.lower()}%"),
             ).fetchall()
         return _meeting(rows[0]) if rows else None
+
+    def find_external(self, source: str, external_id: str) -> Meeting | None:
+        """The meeting already imported for this external id, if any."""
+        if not external_id:
+            return None
+        with self._cursor() as cur:
+            row = cur.execute(
+                "SELECT * FROM meetings WHERE source = ? AND external_id = ?",
+                (source, external_id),
+            ).fetchone()
+        return _meeting(row) if row else None
 
     def list_meetings(self, limit: int = 50) -> list[Meeting]:
         with self._cursor() as cur:
@@ -386,6 +431,8 @@ def _meeting(row: sqlite3.Row) -> Meeting:
         transcript_path=row["transcript_path"],
         participants=json.loads(row["participants"] or "[]"),
         status=row["status"],
+        source=row["source"],
+        external_id=row["external_id"],
         created_at=row["created_at"],
     )
 

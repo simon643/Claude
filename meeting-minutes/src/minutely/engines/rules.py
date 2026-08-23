@@ -267,8 +267,9 @@ class RulesEngine:
         reference = held_on or date.today()
         units = _split_units(transcript)
         known = _known_names(transcript, units)
+        canonical = _canonical_names(transcript)
 
-        actions, review, claimed = self._actions(units, known, reference)
+        actions, review, claimed = self._actions(units, known, canonical, reference)
         decisions = self._decisions(units)
         topics = self._topics(units)
         questions = self._questions(units, claimed)
@@ -291,11 +292,15 @@ class RulesEngine:
     # -- actions ----------------------------------------------------------
 
     def _actions(
-        self, units: list[Unit], known: set[str], reference: date
+        self,
+        units: list[Unit],
+        known: set[str],
+        canonical: dict[str, str],
+        reference: date,
     ) -> tuple[list[ActionItem], list[ActionItem], set[int]]:
         found: list[tuple[Unit, ActionItem]] = []
         for unit in units:
-            item = self._action_from(unit, known, reference)
+            item = self._action_from(unit, known, canonical, reference)
             if item is not None:
                 found.append((unit, item))
 
@@ -321,7 +326,9 @@ class RulesEngine:
         claimed = {unit.position for unit, _item in found}
         return published, review, claimed
 
-    def _action_from(self, unit: Unit, known: set[str], reference: date) -> ActionItem | None:
+    def _action_from(
+        self, unit: Unit, known: set[str], canonical: dict[str, str], reference: date
+    ) -> ActionItem | None:
         raw = unit.text.strip()
         if len(raw.split()) < 3 or _SOCIAL.match(raw):
             return None
@@ -393,6 +400,10 @@ class RulesEngine:
 
         if owner.lower() in self.non_owners:
             owner = ""
+        # "Marcus, can you..." and a transcript that labels him "Marcus Bell"
+        # are the same person. Without this the action register splits in two
+        # and `--owner "marcus bell"` misses half his work.
+        owner = canonical.get(owner.lower(), owner)
         return ActionItem(
             text=task,
             owner=owner,
@@ -530,6 +541,25 @@ def _known_names(transcript: Transcript, units: list[Unit]) -> set[str]:
         if match:
             names.add(match.group(1).lower())
     return names - STOPWORDS - NOT_NAMES
+
+
+def _canonical_names(transcript: Transcript) -> dict[str, str]:
+    """Map every unambiguous short form of a speaker's name to the full one."""
+    speakers = transcript.speakers()
+    index: dict[str, str] = {name.lower(): name for name in speakers}
+    firsts: Counter[str] = Counter()
+    for name in speakers:
+        parts = name.split()
+        if len(parts) > 1:
+            firsts[parts[0].lower()] += 1
+    for name in speakers:
+        parts = name.split()
+        first = parts[0].lower() if parts else ""
+        # Two people called Marcus means the transcript cannot tell us which
+        # one was addressed; leave the name as it was spoken.
+        if len(parts) > 1 and firsts[first] == 1 and first not in index:
+            index[first] = name
+    return index
 
 
 def _leading_name(text: str, known: set[str]) -> str:

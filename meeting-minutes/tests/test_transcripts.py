@@ -55,6 +55,19 @@ def test_inline_label_is_not_stolen_from_a_voice_tag() -> None:
     assert transcript.segments[0].text.startswith("One open question")
 
 
+def test_parse_the_teams_vtt_dialect() -> None:
+    """Teams writes a GUID cue id and unpadded timestamps: 0:1:2.5, not 00:01:02.500."""
+    from tests.fakes import TEAMS_VTT
+
+    transcript = transcripts.parse(TEAMS_VTT, suffix=".vtt")
+    assert transcript.speakers() == ["Dana Okafor", "Priya Raman", "Marcus Bell"]
+    assert transcript.segments[0].start == 2.16
+    assert transcript.segments[-1].end == 62.719
+    # The cue identifier is not speech and must not reach the minutes.
+    assert all("0d1e8f6a" not in segment.text for segment in transcript.segments)
+    assert transcript.segments[1].text.startswith("I'll spin up a Keycloak")
+
+
 def test_parse_openai_whisper_json() -> None:
     payload = '{"language": "en", "segments": [{"start": 0.0, "end": 2.5, "text": " Hello there."}]}'
     transcript = transcripts.parse(payload, suffix=".json")

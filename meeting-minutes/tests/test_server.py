@@ -233,3 +233,137 @@ def test_state_reports_what_is_available(client: Client) -> None:
     assert payload["engine"] == "rules"
     assert "transcriber_ready" in payload
     assert payload["stats"]["meetings"] == 0
+
+
+# -- teams ------------------------------------------------------------------
+
+
+@pytest.fixture
+def teams_client(store: Store) -> Iterator[tuple[Client, Any]]:
+    """A server whose Teams calls go to a fake Microsoft."""
+    from minutely.teams.auth import TeamsAuth
+    from minutely.teams.graph import GraphClient
+    from tests.fakes import TEAMS_VTT, FakeMicrosoft, calendar_payload, json_response, text_response
+
+    fake = (
+        FakeMicrosoft()
+        .add(
+            r"/devicecode",
+            json_response(
+                {
+                    "device_code": "device-code",
+                    "user_code": "H7XK2M9P",
+                    "verification_uri": "https://microsoft.com/devicelogin",
+                    "message": "Enter H7XK2M9P at https://microsoft.com/devicelogin",
+                    "interval": 1,
+                    "expires_in": 900,
+                }
+            ),
+        )
+        .add(
+            r"/oauth2/v2.0/token",
+            json_response(
+                {"access_token": "token", "refresh_token": "r", "expires_in": 3600, "scope": "x"}
+            ),
+        )
+        .json_route(r"/me/calendarView", calendar_payload())
+        .json_route(r"/me/onlineMeetings\?", {"value": [{"id": "meeting-id"}]})
+        .json_route(r"/transcripts(\?|$)", {"value": [{"id": "t1"}]})
+        .add(r"/transcripts/[^/]+/content", text_response(TEAMS_VTT))
+    )
+
+    token_path = store.path.parent / "teams-token.json"
+
+    def auth() -> TeamsAuth:
+        return TeamsAuth(
+            client_id="client-id",
+            transport=fake,
+            token_path=token_path,
+            sleep=lambda _s: None,
+        )
+
+    settings = Settings(auto_process=False, teams_client_id="client-id")
+    server, url = build_server(
+        store,
+        settings,
+        port=0,
+        teams_auth=auth,
+        teams_client=lambda: GraphClient(
+            auth(), transport=fake, downloader=fake.download, sleep=lambda _s: None
+        ),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base, _, query = url.partition("?")
+    token = urllib.parse.parse_qs(query)["token"][0]
+    try:
+        yield Client(base.rstrip("/"), token, store), fake
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _await_job(client: Client, name: str) -> dict[str, Any]:
+    for _ in range(100):
+        _, state = client.get("/api/teams/state")
+        job = state[name]
+        if job["state"] in {"done", "error"}:
+            return job
+        time.sleep(0.05)
+    raise AssertionError(f"teams {name} job never finished")
+
+
+def test_teams_state_reports_configuration(teams_client: tuple[Client, Any]) -> None:
+    client, _fake = teams_client
+    status, payload = client.get("/api/teams/state")
+    assert status == 200
+    assert payload["configured"] is True
+    assert payload["signed_in"] is False
+
+
+def test_signing_in_returns_a_code_and_completes_in_the_background(
+    teams_client: tuple[Client, Any],
+) -> None:
+    client, _fake = teams_client
+    status, started = client.post("/api/teams/login", {})
+    assert status == 200
+    assert started["user_code"] == "H7XK2M9P"
+    assert started["verification_uri"].startswith("https://microsoft.com")
+
+    assert _await_job(client, "login")["state"] == "done"
+    _, payload = client.get("/api/teams/state")
+    assert payload["signed_in"] is True
+
+
+def test_pulling_from_the_ui_imports_and_minutes(teams_client: tuple[Client, Any]) -> None:
+    client, _fake = teams_client
+    client.post("/api/teams/login", {})
+    _await_job(client, "login")
+
+    status, _ = client.post("/api/teams/pull", {"days": 30})
+    assert status == 200
+    job = _await_job(client, "pull")
+    assert job["state"] == "done", job
+    assert "1 of 1" in job["message"]
+
+    _, meetings = client.get("/api/meetings")
+    assert [m["title"] for m in meetings["meetings"]] == ["Weekly product sync"]
+    assert meetings["meetings"][0]["source"] == "teams"
+
+    _, actions = client.get("/api/actions?status=open")
+    assert any(row["owner"] == "Priya Raman" for row in actions["actions"])
+
+
+def test_a_teams_failure_surfaces_as_a_job_error(teams_client: tuple[Client, Any]) -> None:
+    from tests.fakes import graph_error
+
+    client, fake = teams_client
+    client.post("/api/teams/login", {})
+    _await_job(client, "login")
+    # Re-route transcripts to a tenant that blocks Graph access.
+    fake.override(r"/transcripts(\?|$)", graph_error("GraphAccessToTranscriptsDisabled"))
+
+    client.post("/api/teams/pull", {"days": 30})
+    job = _await_job(client, "pull")
+    assert job["state"] == "error"
+    assert "administrator" in job["message"]

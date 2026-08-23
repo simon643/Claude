@@ -6,6 +6,7 @@ recordings/
 *.sqlite3-wal
 *.sqlite3-shm
 config.json
+teams-token.json
 *.webm
 *.m4a
 *.mp3

@@ -294,6 +294,11 @@ class Meeting:
     transcript_path: str = ""
     participants: list[str] = field(default_factory=list)
     status: str = "new"  # new | recording | transcribed | minuted
+    # Where the meeting came from, and its id in that system. Together these
+    # are what stop a second `minutely teams pull` from importing everything
+    # twice.
+    source: str = "local"  # local | teams
+    external_id: str = ""
     created_at: str = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -306,6 +311,8 @@ class Meeting:
             "transcript_path": self.transcript_path,
             "participants": self.participants,
             "status": self.status,
+            "source": self.source,
+            "external_id": self.external_id,
             "created_at": self.created_at,
         }
 
@@ -320,6 +327,8 @@ class Meeting:
             transcript_path=str(raw.get("transcript_path", "")),
             participants=[str(p) for p in raw.get("participants", [])],
             status=str(raw.get("status", "new")),
+            source=str(raw.get("source", "local")) or "local",
+            external_id=str(raw.get("external_id", "")),
             created_at=str(raw.get("created_at", "")) or utcnow(),
         )
 

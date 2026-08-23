@@ -159,3 +159,129 @@ def test_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--version"])
     assert exc.value.code == 0
+
+
+# -- teams ------------------------------------------------------------------
+
+
+def _fake_teams(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake: object) -> None:
+    """Point the CLI's Teams commands at a fake Microsoft."""
+    from minutely.teams.auth import TeamsAuth
+    from minutely.teams.graph import GraphClient
+    from tests.fakes import signed_in_token
+
+    token_path = tmp_path / "teams-token.json"
+    signed_in_token(token_path)
+
+    def auth(*_args: object, **kwargs: object) -> TeamsAuth:
+        return TeamsAuth(
+            client_id=str(kwargs.get("client_id") or "client-id"),
+            transport=fake,  # type: ignore[arg-type]
+            token_path=token_path,
+            sleep=lambda _s: None,
+        )
+
+    def client(*_args: object, **_kwargs: object) -> GraphClient:
+        return GraphClient(
+            auth(),
+            transport=fake,  # type: ignore[arg-type]
+            downloader=fake.download,  # type: ignore[attr-defined]
+            sleep=lambda _s: None,
+        )
+
+    monkeypatch.setattr("minutely.cli.build_auth", auth)
+    monkeypatch.setattr("minutely.cli.build_client", client)
+
+
+def test_teams_status_without_configuration_explains_the_next_step(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code, out, _ = run(["teams", "status"], capsys)
+    assert code == 0
+    assert "no Microsoft application id" in out
+    assert "--teams-client-id" in out
+
+
+def test_teams_list_shows_calendar_meetings(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.fakes import FakeMicrosoft, calendar_payload
+
+    fake = FakeMicrosoft().json_route(r"/me/calendarView", calendar_payload())
+    _fake_teams(monkeypatch, tmp_path, fake)
+
+    code, out, _ = run(["teams", "list"], capsys)
+    assert code == 0
+    assert "Weekly product sync" in out
+    assert "Dana Okafor" in out
+
+
+def test_teams_pull_imports_and_minutes(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.fakes import TEAMS_VTT, FakeMicrosoft, calendar_payload, text_response
+
+    fake = (
+        FakeMicrosoft()
+        .json_route(r"/me/calendarView", calendar_payload())
+        .json_route(r"/me/onlineMeetings\?", {"value": [{"id": "meeting-id"}]})
+        .json_route(r"/transcripts(\?|$)", {"value": [{"id": "t1"}]})
+        .add(r"/transcripts/[^/]+/content", text_response(TEAMS_VTT))
+    )
+    _fake_teams(monkeypatch, tmp_path, fake)
+
+    code, out, _ = run(["teams", "pull", "--days", "30"], capsys)
+    assert code == 0
+    assert "minuted" in out
+
+    code, out, _ = run(["list"], capsys)
+    assert "Weekly product sync" in out
+
+    code, out, _ = run(["actions", "--json"], capsys)
+    rows = json.loads(out)
+    assert any(row["owner"] == "Priya Raman" for row in rows)
+
+    # A second pull is a no-op, not a duplicate.
+    code, out, _ = run(["teams", "pull", "--days", "30"], capsys)
+    assert "nothing new" in out
+    code, out, _ = run(["list", "--json"], capsys)
+    assert len(json.loads(out)) == 1
+
+
+def test_teams_pull_reports_a_meeting_with_no_transcript(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.fakes import FakeMicrosoft, calendar_payload
+
+    fake = (
+        FakeMicrosoft()
+        .json_route(r"/me/calendarView", calendar_payload())
+        .json_route(r"/me/onlineMeetings\?", {"value": [{"id": "meeting-id"}]})
+        .json_route(r"/transcripts(\?|$)", {"value": []})
+    )
+    _fake_teams(monkeypatch, tmp_path, fake)
+
+    code, out, _ = run(["teams", "pull"], capsys)
+    assert code == 0
+    assert "captured no transcript" in out
+    assert "turned on recording" in out
+
+
+def test_teams_logout_forgets_the_tokens(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.fakes import FakeMicrosoft
+
+    _fake_teams(monkeypatch, tmp_path, FakeMicrosoft())
+    code, out, _ = run(["teams", "logout"], capsys)
+    assert code == 0
+    assert "signed out" in out
+    assert not (tmp_path / "teams-token.json").exists()
+
+
+def test_config_stores_the_teams_application_id(capsys: pytest.CaptureFixture[str]) -> None:
+    code, out, _ = run(["config", "--teams-client-id", "abc-123", "--json"], capsys)
+    assert code == 0
+    assert json.loads(out)["teams_client_id"] == "abc-123"
+    code, out, _ = run(["config"], capsys)
+    assert "configured, not signed in" in out

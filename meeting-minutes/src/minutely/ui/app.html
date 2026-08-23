@@ -118,6 +118,11 @@ pre.md { white-space: pre-wrap; font: 13px/1.5 ui-monospace, SFMono-Regular, Men
       <div class="err" id="rec-error"></div>
     </section>
 
+    <section class="panel" id="teams-panel">
+      <h2>Microsoft Teams</h2>
+      <div id="teams-body"><span class="spin"></span></div>
+    </section>
+
     <section class="panel">
       <h2>Meetings</h2>
       <ul class="meetings" id="meeting-list"></ul>
@@ -168,7 +173,7 @@ async function api(path, options) {
 }
 
 const state = { meetingId: null, recorder: null, stream: null, tracks: [], audioCtx: null,
-                startedAt: 0, ticker: null, poller: null, tab: "record" };
+                startedAt: 0, ticker: null, poller: null, teamsPoll: null, tab: "record" };
 
 // ---------------------------------------------------------------- recording
 
@@ -572,6 +577,123 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ------------------------------------------------------------------ teams
+
+async function refreshTeams() {
+  const host = $("teams-body");
+  let info;
+  try {
+    info = await api("/api/teams/state");
+  } catch (err) {
+    host.textContent = "unavailable: " + err.message;
+    return;
+  }
+  host.innerHTML = "";
+
+  if (!info.configured) {
+    host.append(para("Pull the transcripts Teams already made — with speaker names."));
+    const how = document.createElement("p");
+    how.className = "muted";
+    how.style.fontSize = ".84rem";
+    how.textContent = "Needs a one-time Microsoft app registration. See the README, then run: minutely config --teams-client-id <id>";
+    host.append(how);
+    return;
+  }
+
+  if (!info.signed_in) {
+    const login = info.login || {};
+    if (login.state === "running") {
+      host.append(codeBox(login.message));
+      schedulePoll();
+      return;
+    }
+    if (login.state === "error") {
+      const err = document.createElement("p");
+      err.className = "err";
+      err.textContent = login.message;
+      host.append(err);
+    }
+    const button = document.createElement("button");
+    button.className = "primary";
+    button.textContent = "Sign in to Microsoft 365";
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const started = await api("/api/teams/login", { json: {} });
+        host.innerHTML = "";
+        host.append(codeBox(started.message || ("Enter " + started.user_code + " at " + started.verification_uri)));
+        window.open(started.verification_uri, "_blank", "noopener");
+        schedulePoll();
+      } catch (err) {
+        button.disabled = false;
+        const problem = document.createElement("p");
+        problem.className = "err";
+        problem.textContent = err.message;
+        host.append(problem);
+      }
+    };
+    host.append(button);
+    return;
+  }
+
+  const who = document.createElement("p");
+  who.className = "muted";
+  who.style.fontSize = ".85rem";
+  who.style.margin = "0 0 .6rem";
+  who.textContent = "Signed in as " + (info.account || "Microsoft 365");
+  host.append(who);
+
+  const pull = info.pull || {};
+  if (pull.state === "running") {
+    const line = document.createElement("p");
+    line.className = "muted";
+    line.style.fontSize = ".87rem";
+    line.innerHTML = '<span class="spin"></span> ' + escapeHtml(pull.message || "working");
+    host.append(line);
+    schedulePoll();
+    return;
+  }
+
+  const button = document.createElement("button");
+  button.className = "primary";
+  button.textContent = "Pull recent Teams meetings";
+  button.onclick = async () => {
+    button.disabled = true;
+    await api("/api/teams/pull", { json: { days: 7 } });
+    refreshTeams();
+  };
+  host.append(button);
+
+  if (pull.state === "done" || pull.state === "error") {
+    const line = document.createElement("p");
+    line.className = pull.state === "error" ? "err" : "muted";
+    line.style.fontSize = ".84rem";
+    line.textContent = pull.message;
+    host.append(line);
+  }
+
+  const note = document.createElement("p");
+  note.className = "muted";
+  note.style.fontSize = ".82rem";
+  note.textContent = "Only meetings where someone turned on recording or transcription in Teams have anything to pull.";
+  host.append(note);
+}
+
+function codeBox(message) {
+  const box = document.createElement("div");
+  box.className = "notice";
+  box.textContent = message || "Waiting for the sign-in to finish...";
+  return box;
+}
+
+function schedulePoll() {
+  clearTimeout(state.teamsPoll);
+  state.teamsPoll = setTimeout(async () => {
+    await refreshTeams();
+    await refreshMeetings();
+  }, 3000);
+}
+
 // --------------------------------------------------------- action register
 
 async function refreshActions() {
@@ -622,6 +744,7 @@ function showTab(name) {
   $("tab-record").classList.toggle("on", name === "record");
   $("tab-actions").classList.toggle("on", name === "actions");
   $("recorder").classList.toggle("hidden", name !== "record");
+  $("teams-panel").classList.toggle("hidden", name !== "record");
   $("detail").classList.toggle("hidden", name !== "record");
   $("actions-panel").classList.toggle("hidden", name !== "actions");
   if (name === "actions") refreshActions();
@@ -656,6 +779,7 @@ window.addEventListener("beforeunload", (event) => {
     $("statusline").textContent = "cannot reach the local server";
   }
   await refreshMeetings();
+  await refreshTeams();
 })();
 </script>
 </body>
