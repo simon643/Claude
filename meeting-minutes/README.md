@@ -27,6 +27,22 @@ minutely done 4               # tick one off
 
 ## Quick start
 
+### Windows: just take the binary
+
+There is nothing to install. Open the latest [**minutely Windows build**](https://github.com/simon643/Claude/actions/workflows/minutely-windows-exe.yml),
+click the newest green run, and download **minutely-windows** from the
+Artifacts section at the bottom. Unzip it and double-click `minutely.exe`.
+
+Windows will warn that it does not recognise the publisher — the binary is
+unsigned, because signing certificates cost money and this is a personal tool.
+Click **More info** then **Run anyway**.
+
+The binary is built and smoke-tested on a Windows runner for every change: it
+has to report its version, produce minutes from the bundled sample, export
+HTML, and stay running when launched with no arguments, or the build fails.
+
+### Everything else: the installer
+
 There is an installer that finds a suitable Python, builds a private
 environment beside itself, installs the app into it, and leaves you something
 to double-click:
