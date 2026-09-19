@@ -1,0 +1,305 @@
+{
+  "invoices": [
+    {
+      "invoice_id": "bill-2201",
+      "invoice_number": "B-2201",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-officeworks",
+        "name": "Officeworks",
+        "email": "ap@officeworks.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-02",
+      "due_date": "2026-09-30",
+      "amount_total": "189.20",
+      "amount_tax": "17.20",
+      "amount_net": "172.00",
+      "amount_due": "189.20",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Stationery and printer toner",
+          "quantity": "1.0000",
+          "unit_amount": "189.20",
+          "line_amount_gross": "189.20",
+          "line_tax_amount": "17.20",
+          "account_code": "461",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2202",
+      "invoice_number": "B-2202",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-northwind-media",
+        "name": "Northwind Media",
+        "email": "billing@northwind.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-04",
+      "due_date": "2026-10-04",
+      "amount_total": "4620.00",
+      "amount_tax": "420.00",
+      "amount_net": "4200.00",
+      "amount_due": "4620.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Spring campaign \u2014 media buy",
+          "quantity": "1.0000",
+          "unit_amount": "4620.00",
+          "line_amount_gross": "4620.00",
+          "line_tax_amount": "420.00",
+          "account_code": "420",
+          "tracking": {
+            "Department": "Marketing"
+          }
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2203",
+      "invoice_number": "B-2203",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-harbourline-consulting",
+        "name": "Harbourline Consulting",
+        "email": "accounts@harbourline.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-05",
+      "due_date": "2026-10-05",
+      "amount_total": "38500.00",
+      "amount_tax": "3500.00",
+      "amount_net": "35000.00",
+      "amount_due": "38500.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "SOW-14",
+      "line_items": [
+        {
+          "description": "Platform migration \u2014 September",
+          "quantity": "1.0000",
+          "unit_amount": "38500.00",
+          "line_amount_gross": "38500.00",
+          "line_tax_amount": "3500.00",
+          "account_code": "300",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2204",
+      "invoice_number": "B-2204",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-cloudstack-pty-ltd",
+        "name": "Cloudstack Pty Ltd",
+        "email": "billing@cloudstack.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-08",
+      "due_date": "2026-09-22",
+      "amount_total": "1320.00",
+      "amount_tax": "120.00",
+      "amount_net": "1200.00",
+      "amount_due": "1320.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Hosting and backups",
+          "quantity": "1.0000",
+          "unit_amount": "1320.00",
+          "line_amount_gross": "1320.00",
+          "line_tax_amount": "120.00",
+          "account_code": "433",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2205",
+      "invoice_number": "B-2205",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-ferngully-travel",
+        "name": "Ferngully Travel",
+        "email": "invoices@ferngully.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-09",
+      "due_date": "2026-10-09",
+      "amount_total": "6930.00",
+      "amount_tax": "630.00",
+      "amount_net": "6300.00",
+      "amount_due": "6930.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Q3 conference travel \u2014 4 staff",
+          "quantity": "1.0000",
+          "unit_amount": "6930.00",
+          "line_amount_gross": "6930.00",
+          "line_tax_amount": "630.00",
+          "account_code": "429",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2206",
+      "invoice_number": "B-2206",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-meridian-legal-llp",
+        "name": "Meridian Legal LLP",
+        "email": "ar@meridianlegal.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-11",
+      "due_date": "2026-10-11",
+      "amount_total": "9000.00",
+      "amount_tax": "818.18",
+      "amount_net": "8181.82",
+      "amount_due": "9000.00",
+      "currency_code": "USD",
+      "currency_rate": "1.52",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Contract review \u2014 US subsidiary",
+          "quantity": "1.0000",
+          "unit_amount": "9000.00",
+          "line_amount_gross": "9000.00",
+          "line_tax_amount": "818.18",
+          "account_code": "462",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2207",
+      "invoice_number": "B-2207",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-northwind-media",
+        "name": "Northwind Media",
+        "email": "billing@northwind.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-12",
+      "due_date": "2026-10-12",
+      "amount_total": "132.00",
+      "amount_tax": "12.00",
+      "amount_net": "120.00",
+      "amount_due": "132.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Stock imagery licence",
+          "quantity": "1.0000",
+          "unit_amount": "132.00",
+          "line_amount_gross": "132.00",
+          "line_tax_amount": "12.00",
+          "account_code": "420",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2208",
+      "invoice_number": "B-2208",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-apex-facilities",
+        "name": "Apex Facilities",
+        "email": "accounts@apexfacilities.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-15",
+      "due_date": "2026-10-15",
+      "amount_total": "2750.00",
+      "amount_tax": "250.00",
+      "amount_net": "2500.00",
+      "amount_due": "2750.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Quarterly building services",
+          "quantity": "1.0000",
+          "unit_amount": "2750.00",
+          "line_amount_gross": "2750.00",
+          "line_tax_amount": "250.00",
+          "account_code": "461",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "bill-2209",
+      "invoice_number": "B-2209",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-lightfoot-design",
+        "name": "Lightfoot Design",
+        "email": "ben.attwood@harbourview.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-16",
+      "due_date": "2026-10-16",
+      "amount_total": "3300.00",
+      "amount_tax": "300.00",
+      "amount_net": "3000.00",
+      "amount_due": "3300.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Brand refresh \u2014 design retainer",
+          "quantity": "1.0000",
+          "unit_amount": "3300.00",
+          "line_amount_gross": "3300.00",
+          "line_tax_amount": "300.00",
+          "account_code": "420",
+          "tracking": {
+            "Department": "Marketing"
+          }
+        }
+      ]
+    }
+  ]
+}

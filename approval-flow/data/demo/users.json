@@ -1,0 +1,53 @@
+{
+  "users": [
+    {
+      "id": "priya",
+      "name": "Priya Raman",
+      "email": "priya@harbourview.example",
+      "role": "Accounts payable",
+      "approval_limit": "2500.00",
+      "escalates_to": "jo"
+    },
+    {
+      "id": "dana",
+      "name": "Dana Whitfield",
+      "email": "dana@harbourview.example",
+      "role": "Operations manager",
+      "approval_limit": "25000.00",
+      "escalates_to": "cfo"
+    },
+    {
+      "id": "ben",
+      "name": "Ben Attwood",
+      "email": "ben.attwood@harbourview.example",
+      "role": "Marketing lead",
+      "approval_limit": "10000.00",
+      "escalates_to": "cfo"
+    },
+    {
+      "id": "sam",
+      "name": "Sam Okafor",
+      "email": "sam@harbourview.example",
+      "role": "Financial controller",
+      "approval_limit": "50000.00",
+      "away_until": "2026-09-26",
+      "delegate_to": "jo",
+      "escalates_to": "cfo"
+    },
+    {
+      "id": "jo",
+      "name": "Jo Lindqvist",
+      "email": "jo@harbourview.example",
+      "role": "Finance manager",
+      "approval_limit": "50000.00",
+      "escalates_to": "cfo"
+    },
+    {
+      "id": "cfo",
+      "name": "Alex Mercer",
+      "email": "alex@harbourview.example",
+      "role": "CFO",
+      "approval_limit": null
+    }
+  ]
+}

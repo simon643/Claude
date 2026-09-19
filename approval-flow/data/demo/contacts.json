@@ -1,0 +1,74 @@
+{
+  "contacts": [
+    {
+      "contact_id": "c-officeworks",
+      "name": "Officeworks",
+      "email": "ap@officeworks.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-northwind-media",
+      "name": "Northwind Media",
+      "email": "billing@northwind.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-harbourline-consulting",
+      "name": "Harbourline Consulting",
+      "email": "accounts@harbourline.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-cloudstack-pty-ltd",
+      "name": "Cloudstack Pty Ltd",
+      "email": "billing@cloudstack.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-ferngully-travel",
+      "name": "Ferngully Travel",
+      "email": "invoices@ferngully.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-meridian-legal-llp",
+      "name": "Meridian Legal LLP",
+      "email": "ar@meridianlegal.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-apex-facilities",
+      "name": "Apex Facilities",
+      "email": "accounts@apexfacilities.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-lightfoot-design",
+      "name": "Lightfoot Design",
+      "email": "ben.attwood@harbourview.example",
+      "is_supplier": true,
+      "is_customer": false
+    },
+    {
+      "contact_id": "c-brightside-group",
+      "name": "Brightside Group",
+      "email": "ap@brightside.example",
+      "is_supplier": false,
+      "is_customer": true
+    },
+    {
+      "contact_id": "c-cove-&-co",
+      "name": "Cove & Co",
+      "email": "finance@coveandco.example",
+      "is_supplier": false,
+      "is_customer": true
+    }
+  ]
+}

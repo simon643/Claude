@@ -30,3 +30,6 @@ GEMINI.md
 research/
 
 .knack/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

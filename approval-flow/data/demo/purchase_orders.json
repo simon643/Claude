@@ -1,0 +1,39 @@
+{
+  "purchase_orders": [
+    {
+      "invoice_id": "po-0031",
+      "invoice_number": "PO-0031",
+      "type": "ACCPAY",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-harbourline-consulting",
+        "name": "Harbourline Consulting",
+        "email": "accounts@harbourline.example",
+        "is_supplier": true,
+        "is_customer": false
+      },
+      "invoice_date": "2026-09-17",
+      "due_date": "2026-10-17",
+      "amount_total": "22000.00",
+      "amount_tax": "2000.00",
+      "amount_net": "20000.00",
+      "amount_due": "22000.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Phase 2 statement of work",
+          "quantity": "1.0000",
+          "unit_amount": "22000.00",
+          "line_amount_gross": "22000.00",
+          "line_tax_amount": "2000.00",
+          "account_code": "300",
+          "tracking": {}
+        }
+      ],
+      "purchase_order_id": "po-0031",
+      "purchase_order_number": "PO-0031"
+    }
+  ]
+}

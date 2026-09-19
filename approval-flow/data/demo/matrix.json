@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "Low-value bills \u2014 auto",
+      "when": {
+        "kinds": [
+          "bill"
+        ],
+        "amount_max": "250.00"
+      },
+      "auto_approve": true,
+      "note": "Below the cost of reviewing it. Still logged and still audited.",
+      "steps": []
+    },
+    {
+      "name": "Marketing spend",
+      "when": {
+        "kinds": [
+          "bill",
+          "purchase_order"
+        ],
+        "accounts": [
+          "420"
+        ],
+        "amount_max": "10000.00"
+      },
+      "steps": [
+        {
+          "name": "Marketing lead",
+          "approvers": [
+            "ben"
+          ],
+          "sla_days": 2
+        },
+        {
+          "name": "Finance",
+          "approvers": [
+            "jo",
+            "sam"
+          ],
+          "quorum": "any",
+          "when": {
+            "amount_min": "2500.00"
+          },
+          "sla_days": 2
+        }
+      ]
+    },
+    {
+      "name": "Supplier bills \u2014 standard",
+      "when": {
+        "kinds": [
+          "bill",
+          "purchase_order"
+        ],
+        "amount_max": "25000.00"
+      },
+      "steps": [
+        {
+          "name": "Budget holder",
+          "approvers": [
+            "dana"
+          ],
+          "sla_days": 2
+        },
+        {
+          "name": "Finance",
+          "approvers": [
+            "sam"
+          ],
+          "when": {
+            "amount_min": "2500.00"
+          },
+          "sla_days": 2
+        }
+      ]
+    },
+    {
+      "name": "Supplier bills \u2014 major",
+      "when": {
+        "kinds": [
+          "bill",
+          "purchase_order"
+        ]
+      },
+      "note": "No ceiling, so the CFO stands behind every step.",
+      "steps": [
+        {
+          "name": "Budget holder",
+          "approvers": [
+            "dana",
+            "cfo"
+          ],
+          "quorum": "any",
+          "sla_days": 2
+        },
+        {
+          "name": "Finance",
+          "approvers": [
+            "sam",
+            "cfo"
+          ],
+          "quorum": "any",
+          "sla_days": 2
+        },
+        {
+          "name": "CFO",
+          "approvers": [
+            "cfo"
+          ],
+          "sla_days": 3
+        }
+      ]
+    },
+    {
+      "name": "Customer invoices",
+      "when": {
+        "kinds": [
+          "invoice"
+        ],
+        "amount_max": "15000.00"
+      },
+      "steps": [
+        {
+          "name": "Finance review",
+          "approvers": [
+            "jo"
+          ],
+          "sla_days": 1
+        }
+      ]
+    },
+    {
+      "name": "Customer invoices \u2014 major",
+      "when": {
+        "kinds": [
+          "invoice"
+        ]
+      },
+      "steps": [
+        {
+          "name": "Finance review",
+          "approvers": [
+            "jo",
+            "cfo"
+          ],
+          "quorum": "any",
+          "sla_days": 1
+        },
+        {
+          "name": "CFO",
+          "approvers": [
+            "cfo"
+          ],
+          "sla_days": 2
+        }
+      ]
+    },
+    {
+      "name": "Everything else",
+      "note": "Catch-all. Nothing reaches the ledger unrouted.",
+      "steps": [
+        {
+          "name": "Finance review",
+          "approvers": [
+            "jo",
+            "cfo"
+          ],
+          "quorum": "any",
+          "sla_days": 2
+        }
+      ]
+    }
+  ]
+}

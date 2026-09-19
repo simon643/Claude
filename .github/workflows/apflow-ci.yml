@@ -1,0 +1,154 @@
+name: apflow CI
+
+# Deliberately no `branches:` filter, matching the sibling xerobk workflow: the
+# repository-wide ci.yml filtered on `main`, which does not exist here, and so
+# never ran. Matching on paths keeps this working whatever the default branch is
+# called, and only spends CI time when apflow actually changes.
+on:
+  push:
+    paths:
+      - "approval-flow/**"
+      - ".github/workflows/apflow-ci.yml"
+  pull_request:
+    paths:
+      - "approval-flow/**"
+      - ".github/workflows/apflow-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: apflow-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: approval-flow
+
+# A branch with an open PR matches both `push` and `pull_request`, so every job
+# would run twice on the same commit. Skipping push events on non-default
+# branches leaves `pull_request` to cover feature branches and `push` to cover
+# what actually lands. (Repeated per job: the `env` context is not available in
+# a job-level `if`, so this cannot be hoisted into a variable.)
+
+jobs:
+  test:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Matches requires-python = ">=3.11,<3.14" in approval-flow/pyproject.toml.
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: approval-flow/pyproject.toml
+
+      # apflow declares zero runtime dependencies on purpose; this step
+      # installing nothing but the dev tools is the check that it stayed that way.
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests data
+
+      - name: Type check
+        run: mypy src
+
+      - name: Test
+        run: pytest -q
+
+      # Unit tests import the package directly and would still pass if the
+      # console script, package data, or provider wiring were broken. These
+      # exercise the installed entry point end to end against the demo org.
+      - name: CLI smoke test
+        env:
+          APFLOW_HOME: ${{ runner.temp }}/apflow-home
+        run: |
+          apflow --version
+          apflow matrix --snapshot data/demo
+          apflow pull   --snapshot data/demo --requested-by priya --json > /dev/null
+          apflow queue  --snapshot data/demo --json > /dev/null
+          apflow inbox  --snapshot data/demo --as dana --json > /dev/null
+          apflow approve AR-0004 --snapshot data/demo --as dana --comment "ci"
+          apflow show   AR-0004 --snapshot data/demo --json > /dev/null
+          apflow budget --snapshot data/demo --json > /dev/null
+          apflow remind --snapshot data/demo --json > /dev/null
+          apflow audit  --snapshot data/demo --json > /dev/null
+          apflow report turnaround --snapshot data/demo --json > /dev/null
+          # A snapshot cannot write to a ledger, so `push` must refuse with 1
+          # rather than silently reporting success. Assert that contract.
+          apflow push --snapshot data/demo --json > /dev/null && status=0 || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "expected exit 1 pushing against a read-only snapshot, got $status" >&2
+            exit 1
+          fi
+          apflow push --snapshot data/demo --dry-run --json > /dev/null
+
+  demo-data:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # The demo org is generated, so it can silently drift from its generator.
+    # Regenerating and diffing keeps the committed JSON honest — including the
+    # approval matrix, which `matrix --check` is expected to pass.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Regenerate the demo org
+        run: python data/demo/generate.py
+      - name: Fail if the committed demo data is stale
+        run: git diff --exit-code -- data/demo
+
+  no-real-data:
+    if: >-
+      github.event_name != 'push'
+      || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # apflow holds approval evidence and OAuth tokens. This is a tripwire
+    # against committing any of it, since .gitignore only protects files that
+    # were never force-added.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Override the workflow-level default: these checks reason about
+        # repo-root-relative paths, so they must not run from a subdirectory.
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for tracked credentials or approval databases
+        run: |
+          leaked=$(git ls-files --full-name -- ':/approval-flow' \
+            | grep -E '(^|/)(token|config)\.json$|\.sqlite3|(^|/)outbox/' \
+            || true)
+          if [ -n "$leaked" ]; then
+            echo "::error::credential, database, or outbox files are tracked in git" >&2
+            echo "$leaked" >&2
+            exit 1
+          fi
+          echo "no credential, database, or outbox files tracked"
+
+      # A real user directory or approval matrix names real people and their
+      # spending authority. Only the demo copies belong in the repository.
+      - name: Check for stray governance files
+        run: |
+          stray=$(git ls-files --full-name -- ':/approval-flow/**/users.json' \
+                                              ':/approval-flow/**/matrix.json' \
+                                              ':/approval-flow/**/budget.json' \
+            | grep -v '^approval-flow/data/demo/' \
+            || true)
+          if [ -n "$stray" ]; then
+            echo "::error::a users/matrix/budget file is tracked outside the demo org" >&2
+            echo "$stray" >&2
+            exit 1
+          fi
+          echo "only the synthetic demo governance files are tracked"
