@@ -1,0 +1,70 @@
+{
+  "invoices": [
+    {
+      "invoice_id": "inv-4101",
+      "invoice_number": "INV-4101",
+      "type": "ACCREC",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-brightside-group",
+        "name": "Brightside Group",
+        "email": "ap@brightside.example",
+        "is_supplier": false,
+        "is_customer": true
+      },
+      "invoice_date": "2026-09-10",
+      "due_date": "2026-10-10",
+      "amount_total": "17600.00",
+      "amount_tax": "1600.00",
+      "amount_net": "16000.00",
+      "amount_due": "17600.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Implementation \u2014 milestone 2",
+          "quantity": "1.0000",
+          "unit_amount": "17600.00",
+          "line_amount_gross": "17600.00",
+          "line_tax_amount": "1600.00",
+          "account_code": "200",
+          "tracking": {}
+        }
+      ]
+    },
+    {
+      "invoice_id": "inv-4102",
+      "invoice_number": "INV-4102",
+      "type": "ACCREC",
+      "status": "DRAFT",
+      "contact": {
+        "contact_id": "c-cove-&-co",
+        "name": "Cove & Co",
+        "email": "finance@coveandco.example",
+        "is_supplier": false,
+        "is_customer": true
+      },
+      "invoice_date": "2026-09-14",
+      "due_date": "2026-10-14",
+      "amount_total": "3410.00",
+      "amount_tax": "310.00",
+      "amount_net": "3100.00",
+      "amount_due": "3410.00",
+      "currency_code": "AUD",
+      "currency_rate": "1.00",
+      "reference": "",
+      "line_items": [
+        {
+          "description": "Support retainer",
+          "quantity": "1.0000",
+          "unit_amount": "3410.00",
+          "line_amount_gross": "3410.00",
+          "line_tax_amount": "310.00",
+          "account_code": "200",
+          "tracking": {}
+        }
+      ]
+    }
+  ]
+}

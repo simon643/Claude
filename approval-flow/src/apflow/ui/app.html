@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>apflow</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --line: #e2e6ec;
+    --ink: #14181f;
+    --muted: #626b7a;
+    --accent: #13657f;
+    --critical: #b3261e;
+    --warning: #9a6400;
+    --ok: #1d6f42;
+    --chip: #eef1f5;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151a;
+      --panel: #1a1e25;
+      --line: #2b323c;
+      --ink: #e8ebf0;
+      --muted: #9aa4b2;
+      --accent: #5cc2e0;
+      --critical: #ef8078;
+      --warning: #e0b050;
+      --ok: #66c98d;
+      --chip: #242a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 12px 22px; display: flex; align-items: center; gap: 14px;
+    flex-wrap: wrap; position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  .badge {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted);
+  }
+  .spacer { flex: 1; }
+  select, button, textarea {
+    font: inherit; color: inherit; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button[disabled] { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { border-color: var(--critical); color: var(--critical); }
+  main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; padding: 18px 22px 40px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  section > h2 {
+    margin: 0; padding: 12px 16px; font-size: 13px; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--muted); border-bottom: 1px solid var(--line);
+  }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); }
+  .stat { background: var(--panel); padding: 14px 16px; }
+  .stat .n { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: var(--chip); }
+  tr.row.active td { background: var(--chip); box-shadow: inset 3px 0 0 var(--accent); }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .pill.warn { color: var(--warning); }
+  .pill.bad { color: var(--critical); }
+  .pill.good { color: var(--ok); }
+  .empty { padding: 22px 16px; color: var(--muted); }
+  .detail { padding: 14px 16px; }
+  .detail h3 { margin: 0 0 2px; font-size: 16px; }
+  .detail .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .kv { display: grid; grid-template-columns: 132px 1fr; gap: 4px 10px; font-size: 14px; margin-bottom: 14px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .steps { list-style: none; margin: 0 0 14px; padding: 0; }
+  .steps li { padding: 8px 0 8px 22px; border-bottom: 1px solid var(--line); position: relative; }
+  .steps li::before {
+    content: ""; position: absolute; left: 4px; top: 14px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--line);
+  }
+  .steps li.approved::before { background: var(--ok); }
+  .steps li.pending::before { background: var(--warning); }
+  .steps li.rejected::before { background: var(--critical); }
+  .steps .who { color: var(--muted); font-size: 13px; }
+  .steps .decision { font-size: 13px; margin-top: 4px; }
+  .steps .decision .stale { color: var(--critical); }
+  .quote { font-style: italic; color: var(--muted); }
+  .trail { font-size: 12.5px; color: var(--muted); max-height: 190px; overflow: auto; }
+  .trail div { padding: 3px 0; border-bottom: 1px dotted var(--line); }
+  .act { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 4px; }
+  .act textarea { flex: 1; min-height: 52px; resize: vertical; }
+  .note { font-size: 12.5px; color: var(--muted); padding: 8px 16px 14px; }
+  .flash { padding: 9px 16px; font-size: 14px; border-bottom: 1px solid var(--line); }
+  .flash.err { color: var(--critical); }
+  .flash.ok { color: var(--ok); }
+  .lines td { font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>apflow</h1>
+  <span class="meta" id="source">loading…</span>
+  <span class="badge" id="mode"></span>
+  <span class="spacer"></span>
+  <span class="meta">acting as</span>
+  <select id="actor"></select>
+  <button id="refresh">Refresh</button>
+</header>
+
+<div id="flash"></div>
+
+<main>
+  <div>
+    <section>
+      <h2>Position</h2>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section style="margin-top:16px">
+      <h2 id="queue-heading">Awaiting approval</h2>
+      <div id="queue"></div>
+    </section>
+
+    <section style="margin-top:16px">
+      <h2>Budget</h2>
+      <div id="budget"></div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Request</h2>
+      <div id="detail" class="empty">Select a request.</div>
+    </section>
+  </div>
+</main>
+
+<script>
+const TOKEN = "__SESSION_TOKEN__";
+const state = { actor: "", selected: "", overview: null, mineOnly: true };
+
+async function api(path, options) {
+  const response = await fetch(path, Object.assign({ headers: { "X-Session-Token": TOKEN, "Content-Type": "application/json" } }, options || {}));
+  const payload = await response.json().catch(() => ({ error: "bad response" }));
+  if (!response.ok) throw new Error(payload.error || ("HTTP " + response.status));
+  return payload;
+}
+
+function money(value, currency) {
+  const amount = Number(value || 0);
+  const symbol = { AUD: "$", NZD: "$", USD: "$", GBP: "£", EUR: "€" }[currency || "AUD"] || "";
+  return (amount < 0 ? "-" : "") + symbol + Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function text(value) {
+  return String(value === null || value === undefined ? "" : value);
+}
+
+function flash(message, kind) {
+  const host = document.getElementById("flash");
+  host.innerHTML = message ? `<div class="flash ${kind || ""}">${text(message)}</div>` : "";
+  if (message) setTimeout(() => { if (host.textContent === message) host.innerHTML = ""; }, 6000);
+}
+
+function renderStats(data) {
+  const s = data.summary;
+  const cells = [
+    ["Awaiting approval", s.pending.count, money(s.pending.total, data.base_currency)],
+    ["Past SLA", s.pending.breached, "oldest " + s.pending.oldest_days + "d"],
+    ["Approved, unposted", s.ready_to_post.count, money(s.ready_to_post.total, data.base_currency)],
+    ["Budget flags", s.budget_flags.length, s.budget_flags.join(", ") || "none"],
+  ];
+  document.getElementById("stats").innerHTML = cells.map(([k, n, sub]) =>
+    `<div class="stat"><div class="k">${k}</div><div class="n">${n}</div><div class="k">${text(sub)}</div></div>`
+  ).join("");
+}
+
+function renderQueue(data) {
+  const currency = data.base_currency;
+  let rows = data.queue.entries;
+  if (state.mineOnly && state.actor) {
+    const label = (data.users.find(u => u.id === state.actor) || {}).name || state.actor;
+    rows = rows.filter(entry => entry.waiting_on.includes(label));
+  }
+  document.getElementById("queue-heading").innerHTML =
+    (state.mineOnly ? "Waiting on me" : "Awaiting approval") +
+    ` <button id="toggle-mine" style="float:right;margin-top:-4px">${state.mineOnly ? "Show all" : "Show mine"}</button>`;
+  const host = document.getElementById("queue");
+  if (!rows.length) {
+    host.innerHTML = `<div class="empty">Nothing here.</div>`;
+  } else {
+    host.innerHTML = `<table><thead><tr>
+      <th>Ref</th><th>Document</th><th class="num">Amount</th><th>Step</th><th>Waiting on</th><th class="num">Age</th>
+    </tr></thead><tbody>${rows.map(entry => `
+      <tr class="row ${entry.reference === state.selected ? "active" : ""}" data-ref="${entry.reference}">
+        <td>${entry.reference}</td>
+        <td>${text(entry.contact)} <span class="pill">${text(entry.number)}</span>
+            ${entry.budget_status === "breach" ? '<span class="pill bad">over budget</span>' : ""}
+            ${entry.budget_status === "warn" ? '<span class="pill warn">budget</span>' : ""}</td>
+        <td class="num">${money(entry.amount, currency)}${entry.foreign ? "*" : ""}</td>
+        <td>${entry.step.position}. ${text(entry.step.name)}</td>
+        <td>${entry.waiting_on.join(", ")}</td>
+        <td class="num">${entry.breached ? '<span class="pill bad">' : ""}${entry.age_days.toFixed(1)}d${entry.breached ? "</span>" : ""}</td>
+      </tr>`).join("")}</tbody></table>`;
+  }
+  const toggle = document.getElementById("toggle-mine");
+  if (toggle) toggle.onclick = (event) => { event.stopPropagation(); state.mineOnly = !state.mineOnly; renderQueue(state.overview); };
+  host.querySelectorAll("tr.row").forEach(row => {
+    row.onclick = () => select(row.dataset.ref);
+  });
+}
+
+async function renderBudget() {
+  const data = await api("/api/budget");
+  const host = document.getElementById("budget");
+  if (!data.lines.length) {
+    host.innerHTML = `<div class="empty">No budget configured.</div>`;
+    return;
+  }
+  host.innerHTML = `<table><thead><tr><th>Line</th><th class="num">Budget</th><th class="num">Committed</th><th class="num">Left</th></tr></thead>
+    <tbody>${data.lines.map(line => {
+      const left = Number(line.remaining);
+      return `<tr><td>${text(line.label)}</td>
+        <td class="num">${money(line.budget)}</td>
+        <td class="num">${money(line.committed)}</td>
+        <td class="num">${left < 0 ? '<span class="pill bad">' : ""}${money(line.remaining)}${left < 0 ? "</span>" : ""}</td></tr>`;
+    }).join("")}</tbody></table>
+    <div class="note">Committed counts every request that is pending or approved, posted or not — so two approvers cannot each spend the same headroom.</div>`;
+}
+
+function renderDetail(view) {
+  const host = document.getElementById("detail");
+  if (!view) { host.className = "empty"; host.textContent = "Select a request."; return; }
+  host.className = "detail";
+  const budget = view.budget || {};
+  const document_ = view.document || {};
+  const stateClass = { approved: "good", rejected: "bad", pending: "warn", cancelled: "" }[view.state] || "";
+
+  const impacts = (budget.impacts || []).map(impact =>
+    `<div>${text(impact.label)} — ${money(impact.remaining_before)} left, ${money(impact.remaining_after)} after (${impact.utilisation}% used)</div>`
+  ).join("");
+
+  const lines = (document_.line_items || []).map(line =>
+    `<tr><td>${text(line.description)}</td><td>${text(line.account_code) || "—"}</td><td class="num">${money(line.line_amount, view.currency)}</td></tr>`
+  ).join("");
+
+  const steps = view.steps.map(step => `
+    <li class="${step.state}">
+      <strong>${step.position}. ${text(step.name)}</strong>
+      <span class="pill">${step.state}</span>
+      ${step.quorum === "all" ? '<span class="pill">all must agree</span>' : ""}
+      <div class="who">${step.approvers.map(a => text(a.label) + (a.delegated_from ? ` (covering for ${text(a.delegated_from)})` : "")).join(", ")}</div>
+      ${step.decisions.map(d => `<div class="decision">${text(d.decision)} — ${text(d.user_id)} ${text(d.created_at).slice(0, 19)}
+         ${d.current ? "" : '<span class="stale">[superseded version]</span>'}
+         ${d.comment ? `<div class="quote">“${text(d.comment)}”</div>` : ""}</div>`).join("")}
+    </li>`).join("");
+
+  const trail = view.events.map(event =>
+    `<div>${text(event.created_at).slice(0, 19)} · <strong>${text(event.kind)}</strong> ${event.actor ? "[" + text(event.actor) + "]" : ""} ${text(event.detail)}</div>`
+  ).join("");
+
+  const mine = view.steps.some(step =>
+    step.state === "pending" && step.approvers.some(a => a.user_id === state.actor)
+  );
+
+  host.innerHTML = `
+    <h3>${view.reference} · ${text(view.kind).replace("_", " ")} ${text(view.number)}
+        <span class="pill ${stateClass}">${text(view.state)}</span></h3>
+    <div class="sub">${text(view.contact)} · routed by ${text(view.rule)} · raised by ${text(view.requested_by)}</div>
+    <dl class="kv">
+      <dt>Amount</dt><dd>${view.currency} ${money(view.amount, view.currency)}</dd>
+      <dt>Dated / due</dt><dd>${text(view.document_date) || "—"} / ${text(view.due_date) || "—"}</dd>
+      <dt>Budget</dt><dd>${text(view.budget_status)}${budget.message ? " — " + text(budget.message) : ""}${impacts}</dd>
+      <dt>Fingerprint</dt><dd><code>${text(view.fingerprint)}</code></dd>
+      ${view.pushed_at ? `<dt>Posted</dt><dd>${text(view.pushed_at)}</dd>` : ""}
+    </dl>
+    ${lines ? `<table class="lines"><thead><tr><th>Line</th><th>Account</th><th class="num">Amount</th></tr></thead><tbody>${lines}</tbody></table>` : ""}
+    <ul class="steps">${steps}</ul>
+    ${view.state === "pending" ? `
+      <div class="act">
+        <textarea id="comment" placeholder="Comment (required to reject)"></textarea>
+      </div>
+      <div class="act">
+        <button class="primary" id="approve" ${mine ? "" : "disabled"}>Approve</button>
+        <button class="danger" id="reject" ${mine ? "" : "disabled"}>Reject</button>
+        ${mine ? "" : '<span class="note">Not waiting on the selected user.</span>'}
+      </div>` : ""}
+    <h2 style="border:0;padding:12px 0 4px">Audit trail</h2>
+    <div class="trail">${trail}</div>`;
+
+  const approve = document.getElementById("approve");
+  const reject = document.getElementById("reject");
+  if (approve) approve.onclick = () => decide("approve");
+  if (reject) reject.onclick = () => decide("reject");
+}
+
+async function decide(decision) {
+  const comment = (document.getElementById("comment") || {}).value || "";
+  try {
+    const result = await api("/api/decide", {
+      method: "POST",
+      body: JSON.stringify({ reference: state.selected, user: state.actor, decision, comment }),
+    });
+    flash(result.message, "ok");
+    await refresh();
+    await select(state.selected);
+  } catch (error) {
+    flash(error.message, "err");
+  }
+}
+
+async function select(reference) {
+  state.selected = reference;
+  try {
+    const view = await api("/api/request?id=" + encodeURIComponent(reference));
+    renderDetail(view);
+  } catch (error) {
+    flash(error.message, "err");
+  }
+  if (state.overview) renderQueue(state.overview);
+}
+
+async function refresh() {
+  const data = await api("/api/overview");
+  state.overview = data;
+  document.getElementById("source").textContent = data.source;
+  document.getElementById("mode").textContent = data.can_write ? "read/write" : "read-only";
+  const actor = document.getElementById("actor");
+  if (!actor.options.length) {
+    actor.innerHTML = data.users.map(user =>
+      `<option value="${user.id}">${text(user.name || user.id)}${user.approval_limit ? " · " + money(user.approval_limit) : " · unlimited"}</option>`
+    ).join("");
+    state.actor = (data.users[0] || {}).id || "";
+    actor.value = state.actor;
+    actor.onchange = () => { state.actor = actor.value; renderQueue(state.overview); if (state.selected) select(state.selected); };
+  }
+  renderStats(data);
+  renderQueue(data);
+  await renderBudget();
+}
+
+document.getElementById("refresh").onclick = () => refresh().catch(error => flash(error.message, "err"));
+refresh().catch(error => flash(error.message, "err"));
+</script>
+</body>
+</html>

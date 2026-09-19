@@ -1,0 +1,52 @@
+{
+  "accounts": [
+    {
+      "code": "200",
+      "name": "Sales",
+      "type": "REVENUE",
+      "tax_type": "OUTPUT"
+    },
+    {
+      "code": "300",
+      "name": "Contractors",
+      "type": "DIRECTCOSTS",
+      "tax_type": "INPUT"
+    },
+    {
+      "code": "420",
+      "name": "Advertising & marketing",
+      "type": "EXPENSE",
+      "tax_type": "INPUT"
+    },
+    {
+      "code": "429",
+      "name": "Travel",
+      "type": "EXPENSE",
+      "tax_type": "INPUT"
+    },
+    {
+      "code": "433",
+      "name": "IT & software",
+      "type": "EXPENSE",
+      "tax_type": "INPUT"
+    },
+    {
+      "code": "461",
+      "name": "Office expenses",
+      "type": "EXPENSE",
+      "tax_type": "INPUT"
+    },
+    {
+      "code": "462",
+      "name": "Legal & professional",
+      "type": "EXPENSE",
+      "tax_type": "INPUT"
+    },
+    {
+      "code": "090",
+      "name": "Business account",
+      "type": "BANK",
+      "tax_type": "NONE"
+    }
+  ]
+}

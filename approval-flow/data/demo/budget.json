@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "granularity": "monthly",
+  "fy_start_month": 7,
+  "lines": [
+    {
+      "period": "2026-09",
+      "account": "420",
+      "amount": "12000.00",
+      "name": "Marketing"
+    },
+    {
+      "period": "2026-09",
+      "account": "429",
+      "amount": "4000.00",
+      "name": "Travel"
+    },
+    {
+      "period": "2026-09",
+      "account": "433",
+      "amount": "8000.00",
+      "name": "IT & software"
+    },
+    {
+      "period": "2026-09",
+      "account": "300",
+      "amount": "60000.00",
+      "name": "Contractors"
+    },
+    {
+      "period": "2026-09",
+      "account": "461",
+      "amount": "5000.00",
+      "name": "Office"
+    },
+    {
+      "period": "2026-10",
+      "account": "420",
+      "amount": "12000.00",
+      "name": "Marketing"
+    },
+    {
+      "period": "2026-10",
+      "account": "300",
+      "amount": "60000.00",
+      "name": "Contractors"
+    }
+  ]
+}
